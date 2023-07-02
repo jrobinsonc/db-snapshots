@@ -1,0 +1,30 @@
+import { statSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+
+import getDumpFiles from './get-dump-files.js';
+import { DUMP_DIR } from '../constants.js';
+import logger from './logger.js';
+
+/**
+ *
+ */
+export default async function cleanDumpFiles() {
+  const fileList = await getDumpFiles();
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+  return fileList.filter((file) => {
+    try {
+      const filePath = join(DUMP_DIR, `${file}.sql`);
+      const stats = statSync(filePath);
+
+      if (stats.birthtimeMs < oneDayAgo) {
+        unlinkSync(filePath);
+        return true;
+      }
+    } catch (error) {
+      logger.error(error);
+    }
+
+    return false;
+  });
+}

@@ -1,0 +1,40 @@
+// export default function humanReadableSize(bytes) {
+//   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+//   let i;
+//   for (i = 0; bytes >= 1024 && i < units.length - 1; i++) {
+//     bytes /= 1024;
+//   }
+//   return `${Math.max(bytes, 0.1).toFixed(1)} ${units[i]}`;
+// }
+
+// import fs from 'fs';
+
+// import { DUMP_DIR } from '../constants.js';
+
+// export default class FileInfo {
+//   fileName;
+
+//   fileStatData;
+
+//   constructor(fileName) {
+//     this.fileName = fileName;
+//   }
+
+//   get fileStat() {
+//     if (!this.fileStatData) {
+//       this.fileStatData = fs.statSync(`${DUMP_DIR}/${this.fileName}`);
+//     }
+
+//     return this.fileStatData;
+//   }
+
+//   get createdOn() {
+//     return this.fileStat.birthtime;
+//     // return `${fileStat.birthtime.toLocaleDateString()} ${fileStat.birthtime.toLocaleTimeString()}`;
+//   }
+
+//   get size() {
+//     return this.fileStat.size;
+//     // return humanReadableSize(fileStat.size);
+//   }
+// }

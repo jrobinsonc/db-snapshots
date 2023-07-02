@@ -1,0 +1,22 @@
+{
+  "npm.packageManager": "yarn",
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+  "eslint.enable": true,
+  "eslint.debug": true,
+  "eslint.format.enable": true,
+  "eslint.options": {
+    "overrideConfigFile": ".eslintrc.cjs",
+    "extensions": [
+      ".js"
+    ]
+  },
+  "eslint.validate": [
+    "javascript"
+  ],
+  "cSpell.words": [
+    "clui"
+  ],
+  "prettier.enable": false,
+  "javascript.validate.enable": false
+}
