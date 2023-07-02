@@ -1,10 +1,21 @@
 {
   "name": "@jrobinsonc/db-snapshots",
+  "title": "Database Snapshots",
+  "description": "Quickly create and load a database snapshots",
+  "keywords": ["database", "snapshots"],
+  "homepage": "https://github.com/jrobinsonc/db-snapshots/#readme",
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
   "author": "Jose Robinson <me@joserobinson.com> (https://joserobinson.com/)",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jrobinsonc/db-snapshots.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jrobinsonc/db-snapshots/issues"
+  },
   "scripts": {
     "lint": "eslint src --max-warnings=0",
     "test": "jest"
