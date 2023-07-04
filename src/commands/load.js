@@ -4,13 +4,12 @@ import inquirerPrompt from 'inquirer-autocomplete-prompt';
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-
-inquirer.registerPrompt('autocomplete', inquirerPrompt);
-
 import config from '../config.js';
 import { DUMP_DIR } from '../constants.js';
 import getDumpFiles from '../utils/get-dump-files.js';
 import logger from '../utils/logger.js';
+
+inquirer.registerPrompt('autocomplete', inquirerPrompt);
 
 /**
  * Imports a dump file into the given connection.

@@ -4,14 +4,25 @@ import inquirerPrompt from 'inquirer-autocomplete-prompt';
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-
-inquirer.registerPrompt('autocomplete', inquirerPrompt);
-
 import config from '../config.js';
 import { DUMP_DIR } from '../constants.js';
 import getDumpFiles from '../utils/get-dump-files.js';
 import logger from '../utils/logger.js';
-import getApp from '../utils/get-app.js';
+
+inquirer.registerPrompt('autocomplete', inquirerPrompt);
+
+/**
+ * Formats a dump file name
+ *
+ * @param {string} name - The name of the dump file
+ * @returns {string} - The formatted name
+ */
+function formatFilename(name) {
+  return name
+    .trim()
+    .replaceAll(/[^\da-z-]+/gi, '-')
+    .replaceAll(/-+/g, '-');
+}
 
 /**
  * Exports a database to a dump file
@@ -52,10 +63,7 @@ async function getDump(dumpName) {
   const dump = { name: '', path: '' };
 
   if (dumpName) {
-    dump.name = dumpName
-      .trim()
-      .replaceAll(/[^\da-z-]+/gi, '-')
-      .replaceAll(/-+/g, '-');
+    dump.name = formatFilename(dumpName);
   } else {
     const createNewText = 'CREATE NEW: ';
     const fileList = await getDumpFiles();
@@ -85,7 +93,7 @@ async function getDump(dumpName) {
     //   },
     // ]);
 
-    dump.name = answers.dumpName.replace(createNewText, '');
+    dump.name = formatFilename(answers.dumpName.replace(createNewText, ''));
   }
 
   dump.path = join(DUMP_DIR, `${dump.name}.sql`);
