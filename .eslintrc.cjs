@@ -17,15 +17,20 @@ module.exports = {
     sourceType: 'module',
   },
   rules: {
+    'no-alert': 'warn',
+    'no-console': 'warn',
+    'no-continue': 'warn',
+    'no-debugger': 'warn',
+    'no-else-return': 'warn',
+    'no-empty-pattern': 'warn',
+    'no-empty': 'warn',
+    'no-unreachable': 'warn',
+    'no-unused-vars': 'warn',
     'no-var': 'warn',
     'prefer-const': 'warn',
+    'no-magic-numbers': ['warn', { ignore: [0] }],
     eqeqeq: 'warn',
-    'no-empty': 'warn',
-    'no-empty-pattern': 'warn',
-    'no-console': 'warn',
-    'no-unused-vars': 'warn',
-    'no-else-return': 'warn',
-    'no-continue': 'warn',
+    'no-confusing-arrow': 'warn',
 
     'import/extensions': ['error', 'ignorePackages'],
 
@@ -33,7 +38,11 @@ module.exports = {
 
     'jsdoc/tag-lines': ['warn', 'any', { startLines: 1 }],
 
-    'unicorn/no-process-exit': 'off',
+    'unicorn/no-process-exit': 'off', // This is a CLI app.
     'unicorn/no-array-reduce': 'off',
+    'unicorn/prevent-abbreviations': 'off',
+    'unicorn/custom-error-definition': 'error',
+    'unicorn/no-unsafe-regex': 'error',
+    'unicorn/no-unused-properties': 'warn',
   },
 };
