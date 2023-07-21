@@ -1,31 +1,32 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-
 import { ROOT_DIR } from './constants.js';
+import { UserError } from './utils/exceptions.js';
 import logger from './utils/logger.js';
 import parseCliArguments from './utils/parse-cli-arguments.js';
 
 const [cmd, cmdArguments] = parseCliArguments(process.argv.slice(2));
 
-if (!cmd) {
-  logger.error('Please provide a valid command');
-  process.exit(1);
-}
-
-const commandFile = join(ROOT_DIR, 'src', 'commands', `${cmd}.js`);
-
 try {
+  if (!cmd) {
+    throw new UserError('Please provide a valid command');
+  }
+
+  const commandFile = join(ROOT_DIR, 'src', 'commands', `${cmd}.js`);
+
+  if (!existsSync(commandFile)) {
+    throw new UserError(`Command "${cmd}" does not exist.`);
+  }
+
   const { default: commandFunction } = await import(commandFile);
 
-  commandFunction({
+  await commandFunction({
     args: cmdArguments,
   });
 } catch (error) {
-  if (
-    error.code === 'ERR_MODULE_NOT_FOUND' &&
-    error.message.includes(`Cannot find module '${commandFile}'`)
-  ) {
-    logger.error(`Unknown command "${cmd}"`);
-    process.exit(1);
+  if (error instanceof UserError) {
+    logger.error(`Error: ${error.message}`);
+    process.exit();
   }
 
   throw error;
