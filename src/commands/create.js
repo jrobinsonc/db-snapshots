@@ -1,13 +1,14 @@
 import CLI from 'clui';
 import inquirer from 'inquirer';
 import inquirerPrompt from 'inquirer-autocomplete-prompt';
-import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config.js';
 import { DUMP_DIR } from '../constants.js';
+import { UserError, raise } from '../utils/exceptions.js';
 import getDumpFiles from '../utils/get-dump-files.js';
 import logger from '../utils/logger.js';
+import runMySqlCommand from '../utils/run-mysql-command.js';
 
 inquirer.registerPrompt('autocomplete', inquirerPrompt);
 
@@ -15,96 +16,93 @@ inquirer.registerPrompt('autocomplete', inquirerPrompt);
  * Formats a dump file name
  *
  * @param {string} name - The name of the dump file
- * @returns {string} - The formatted name
+ * @returns {string} The formatted name
+ * @throws {UserError} If the name is not given
  */
 function formatFilename(name) {
-  return name
+  return (name || raise(new UserError('No dump file name provided')))
     .trim()
     .replaceAll(/[^\da-z-]+/gi, '-')
     .replaceAll(/-+/g, '-');
 }
 
 /**
- * Exports a database to a dump file
+ * Ask dump file name
  *
- * @param {object} connection - The connection object
- * @param {string} dumpFile - The path of the dump file
- * @returns {Promise} - A promise that resolves when the export is complete
+ * @returns {Promise<string>} Promise that resolves with the dump file name
  */
-async function createDumpFile(connection, dumpFile) {
-  return new Promise((resolve, reject) => {
-    const procTimeout = setTimeout(() => {
-      proc.kill();
-      reject(new Error('Timeout'));
-    }, 30_000);
+async function askDumpName() {
+  const filesList = await getDumpFiles();
+  const basePromptConfig = {
+    name: 'dumpName',
+    message: 'Please enter the name for the dump file:',
+  };
 
-    const proc = exec(
-      `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} --opt --dump-date ${connection.database} > ${dumpFile}`,
-      (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        clearTimeout(procTimeout);
-        resolve(true);
-      },
-    );
-  });
-}
-
-/**
- * Retrieves a dump file
- *
- * @param {string} dumpName - The name of the dump file to retrieve
- * @returns {Promise<object>} - A promise that resolves with the dump file
- */
-async function getDump(dumpName) {
-  const dump = { name: '', path: '' };
-
-  if (dumpName) {
-    dump.name = formatFilename(dumpName);
-  } else {
-    const createNewText = 'CREATE NEW: ';
-    const fileList = await getDumpFiles();
-    const answers = await inquirer.prompt([
+  if (filesList.length > 0) {
+    const { dumpName } = await inquirer.prompt([
       {
+        ...basePromptConfig,
         type: 'autocomplete',
-        name: 'dumpName',
-        message: 'Type the name for the dump file:',
-        source: (_, input = '') => {
-          const list = fileList.filter((element) => element.includes(input));
+        source: (_, searchText = '') => {
+          const searchInputIsEmpty = searchText.length === 0;
+          const filteredList = searchInputIsEmpty
+            ? filesList
+            : filesList.filter((element) => element.includes(searchText));
+          const hasResults = filteredList.length > 0;
 
-          if (input.length > 0 && list.length === 0) {
-            return [`${createNewText}${input}`];
+          if (!searchInputIsEmpty && !hasResults) {
+            return [searchText];
           }
 
-          return list;
+          return filteredList;
         },
       },
     ]);
 
-    // const answers = await inquirer.prompt([
-    //   {
-    //     type: 'input',
-    //     name: 'dumpName',
-    //     message: 'Dump name:',
-    //     default: new Date().toISOString().replaceAll(/\D/g, ''),
-    //   },
-    // ]);
-
-    dump.name = formatFilename(answers.dumpName.replace(createNewText, ''));
+    return dumpName;
   }
 
+  const { dumpName } = await inquirer.prompt([
+    {
+      ...basePromptConfig,
+      type: 'input',
+    },
+  ]);
+
+  return dumpName;
+}
+
+/**
+ * @typedef {object} DumpFile
+ * @property {string} name - The name of the dump file
+ * @property {string} path - The path to the dump file
+ * @property {boolean} exists - Whether or not the dump file exists
+ */
+
+/**
+ * Retrieves a dump file
+ *
+ * @param {string|undefined} dumpName - The name of the dump file to retrieve
+ * @returns {Promise<DumpFile|null>} A promise that resolves with the dump file or null
+ */
+async function getDump(dumpName) {
+  const dump = {
+    name: dumpName || (await askDumpName()),
+    path: '',
+    exists: false,
+  };
+
+  dump.name = formatFilename(dump.name);
   dump.path = join(DUMP_DIR, `${dump.name}.sql`);
+  dump.exists = existsSync(dump.path);
 
   // If the file already exists, ask if the user wants to overwrite it.
-  if (existsSync(dump.path)) {
+  if (dump.exists) {
     const answers = await inquirer.prompt([
       {
         type: 'confirm',
         name: 'confirmOverwrite',
-        message: 'This file already exists, do you want to overwrite it?',
+        message: "You're sure you want to overwrite this file?",
         default: true,
       },
     ]);
@@ -129,9 +127,15 @@ export default async ({ args }) => {
 
   try {
     status.start();
-    await createDumpFile(connection, dump.path);
+
+    await runMySqlCommand(
+      `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} --opt --dump-date ${connection.database} > ${dump.path}`,
+    );
+
     status.stop();
-    logger.success(`Dump file has been created successfully: ${dump.name}`);
+    logger.log(
+      `Dump file ${dump.exists ? 'updated' : 'created'}: ${dump.name}`,
+    );
   } catch (error) {
     status.stop();
 

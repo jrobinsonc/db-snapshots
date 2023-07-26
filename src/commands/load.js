@@ -1,50 +1,22 @@
 import CLI from 'clui';
 import inquirer from 'inquirer';
 import inquirerPrompt from 'inquirer-autocomplete-prompt';
-import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config.js';
 import { DUMP_DIR } from '../constants.js';
+import { UserError } from '../utils/exceptions.js';
 import getDumpFiles from '../utils/get-dump-files.js';
 import logger from '../utils/logger.js';
+import runMySqlCommand from '../utils/run-mysql-command.js';
 
 inquirer.registerPrompt('autocomplete', inquirerPrompt);
-
-/**
- * Imports a dump file into the given connection.
- *
- * @param {object} connection - The connection to the host.
- * @param {string} dumpFile - The path of the dump file to be imported.
- * @returns {Promise} A promise that resolves when the import is complete.
- */
-async function importDumpFile(connection, dumpFile) {
-  return new Promise((resolve, reject) => {
-    const procTimeout = setTimeout(() => {
-      proc.kill();
-      reject(new Error('Timeout'));
-    }, 30_000);
-
-    const proc = exec(
-      `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} ${connection.database} < ${dumpFile}`,
-      (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        clearTimeout(procTimeout);
-        resolve(true);
-      },
-    );
-  });
-}
 
 /**
  * Retrieves a dump file
  *
  * @param {string} dumpName - The name of the dump file to retrieve
- * @returns {Promise<object>} - A promise that resolves with the dump file
+ * @returns {Promise<object>} A promise that resolves with the dump file
  */
 async function getDump(dumpName) {
   const dump = { name: '', path: '' };
@@ -80,9 +52,7 @@ async function getDump(dumpName) {
   dump.path = join(DUMP_DIR, `${dump.name}.sql`);
 
   if (!existsSync(dump.path)) {
-    logger.error(`Could not find dump: ${dump.name}`);
-
-    return;
+    throw new UserError(`This dump file doesn't exist: ${dump.name}`);
   }
 
   return dump;
@@ -100,9 +70,13 @@ export default async ({ args }) => {
 
   try {
     status.start();
-    await importDumpFile(connection, dump.path);
+
+    await runMySqlCommand(
+      `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} ${connection.database} < ${dump.path}`,
+    );
+
     status.stop();
-    logger.success(`Dump file imported successfully: ${dump.name}`);
+    logger.success(`Dump file imported: ${dump.name}`);
   } catch (error) {
     status.stop();
 
