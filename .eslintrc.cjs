@@ -1,8 +1,8 @@
 module.exports = {
+  root: true,
   env: {
     node: true,
     es2022: true,
-    jest: true,
   },
   extends: [
     'eslint:recommended',
@@ -13,7 +13,6 @@ module.exports = {
   ],
   plugins: ['prettier'],
   parserOptions: {
-    ecmaVersion: 'latest',
     sourceType: 'module',
   },
   rules: {
@@ -23,6 +22,7 @@ module.exports = {
     'no-debugger': 'warn',
     'no-else-return': 'warn',
     'no-empty-pattern': 'warn',
+    'no-warning-comments': 'warn',
     'no-empty': 'warn',
     'no-unreachable': 'warn',
     'no-unused-vars': 'warn',
@@ -45,4 +45,12 @@ module.exports = {
     'unicorn/no-unsafe-regex': 'error',
     'unicorn/no-unused-properties': 'warn',
   },
+  overrides: [
+    {
+      files: ['**/*.test.js'],
+      env: {
+        jest: true,
+      },
+    },
+  ],
 };

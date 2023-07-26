@@ -2,3 +2,4 @@ node_modules/
 coverage/
 dump/
 !dump/.gitkeep
+yarn-error.log

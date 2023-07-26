@@ -1,7 +1,7 @@
 {
   "npm.packageManager": "yarn",
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "eslint.enable": true,
   "eslint.debug": true,
   "eslint.format.enable": true,
@@ -17,5 +17,8 @@
   "cSpell.words": [
     "clui"
   ],
-  "javascript.validate.enable": false
+  "prettier.enable": true,
+  "[javascript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+  },
 }

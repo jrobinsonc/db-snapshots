@@ -2,7 +2,10 @@
   "name": "@jrobinsonc/db-snapshots",
   "title": "Database Snapshots",
   "description": "Quickly create and load a database snapshots",
-  "keywords": ["database", "snapshots"],
+  "keywords": [
+    "database",
+    "snapshots"
+  ],
   "homepage": "https://github.com/jrobinsonc/db-snapshots/#readme",
   "version": "1.0.0",
   "main": "index.js",
@@ -24,28 +27,28 @@
     "dbs": "./index.js"
   },
   "dependencies": {
-    "chalk": "^5.2.0",
+    "chalk": "^5.3.0",
     "clui": "^0.3.6",
     "configstore": "^6.0.0",
-    "inquirer": "^9.2.7",
+    "inquirer": "^9.2.8",
     "inquirer-autocomplete-prompt": "^3.0.0",
     "lodash": "^4.17.21",
     "minimist": "^1.2.8"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.22.5",
-    "@types/jest": "^29.5.2",
-    "@types/node": "^17.0.34",
-    "babel-jest": "^29.5.0",
+    "@babel/preset-env": "^7.22.9",
+    "@types/jest": "^29.5.3",
+    "@types/node": "^20.4.5",
+    "babel-jest": "^29.6.1",
     "babel-plugin-transform-import-meta": "^2.2.0",
-    "eslint": "^8.43.0",
+    "eslint": "^8.45.0",
     "eslint-config-prettier": "^8.8.0",
-    "eslint-plugin-import": "^2.25.2",
-    "eslint-plugin-jsdoc": "^46.2.6",
-    "eslint-plugin-prettier": "^4.2.1",
-    "eslint-plugin-unicorn": "^47.0.0",
-    "jest": "^29.5.0",
-    "prettier": "^2.8.8"
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-jsdoc": "^46.4.4",
+    "eslint-plugin-prettier": "^5.0.0",
+    "eslint-plugin-unicorn": "^48.0.1",
+    "jest": "^29.6.1",
+    "prettier": "^3.0.0"
   },
   "engines": {
     "node": ">=16.20",
