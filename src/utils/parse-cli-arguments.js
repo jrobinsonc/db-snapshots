@@ -4,7 +4,7 @@ import minimist from 'minimist';
  * Parses the CLI arguments into a Map object.
  *
  * @param {object} cliArguments - An object containing the CLI arguments.
- * @returns {[string, Map]} - A tuple with the command and a Map with all the arguments.
+ * @returns {[string, Map]} A tuple with the command and a Map with all the arguments.
  */
 export default function parseCliArguments(cliArguments) {
   const {
