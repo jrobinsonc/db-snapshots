@@ -1,5 +1,5 @@
 {
-  "npm.packageManager": "yarn",
+  "npm.packageManager": "pnpm",
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "eslint.enable": true,
