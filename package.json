@@ -27,7 +27,7 @@
     "dbs": "./index.js"
   },
   "dependencies": {
-    "chalk": "^5.3.0",
+    "chalk": "^5.6.2",
     "clui": "^0.3.6",
     "configstore": "^6.0.0",
     "inquirer": "^9.2.8",
