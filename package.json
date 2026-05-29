@@ -21,7 +21,8 @@
   },
   "scripts": {
     "lint": "eslint src --max-warnings=0",
-    "test": "jest"
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "bin": {
     "dbs": "./index.js"
