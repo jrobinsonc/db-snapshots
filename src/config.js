@@ -19,10 +19,11 @@ export default {
         type: 'input',
         name: 'host',
         default: '127.0.0.1',
-        validate: (input) =>
-          /^((?:\d{1,3}\.){3}\d{1,3}|\w+)$/.test(input)
+        validate: (input) => {
+          return /^((?:\d{1,3}\.){3}\d{1,3}|\w+)$/.test(input)
             ? true
-            : 'Invalid host.',
+            : 'Invalid host.';
+        },
       },
       {
         type: 'input',
@@ -37,15 +38,17 @@ export default {
       {
         type: 'input',
         name: 'database',
-        validate: (input) =>
-          /^\w+$/.test(input) ? true : 'Invalid database name.',
+        validate: (input) => {
+          return /^\w+$/.test(input) ? true : 'Invalid database name.';
+        },
       },
       {
         type: 'input',
         name: 'port',
         default: 3306,
-        validate: (input) =>
-          /^\d+$/i.test(input) ? true : 'Invalid port number.',
+        validate: (input) => {
+          return /^\d+$/i.test(input) ? true : 'Invalid port number.';
+        },
       },
     ]);
 

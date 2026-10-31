@@ -5,7 +5,10 @@ import { UserError } from './utils/exceptions.js';
 import logger from './utils/logger.js';
 import parseCliArguments from './utils/parse-cli-arguments.js';
 
-const [cmd, cmdArguments] = parseCliArguments(process.argv.slice(2));
+const CLI_ARGUMENT_OFFSET = 2;
+const [cmd, cmdArguments] = parseCliArguments(
+  process.argv.slice(CLI_ARGUMENT_OFFSET),
+);
 
 try {
   if (!cmd) {
