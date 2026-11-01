@@ -2,7 +2,7 @@ import pkg from '../package.json';
 import { getCommand, listCommands } from './commands';
 import { UserError } from './utils/exceptions';
 import { renderCommandHelp, renderGeneralHelp } from './utils/help';
-import logger from './utils/logger';
+import { printDiagnostic, printError, printResult } from './utils/output';
 import parseCliArguments from './utils/parse-cli-arguments';
 
 const CLI_ARGUMENT_OFFSET = 2;
@@ -60,7 +60,11 @@ try {
     command.options,
   );
 
-  await command.run({ args: commandArguments });
+  const result = await command.run({ args: commandArguments });
+
+  if (result) {
+    printResult(result);
+  }
 } catch (caught) {
   // yargs rejects unknown or invalid flags with a YError.
   const error =
@@ -69,12 +73,12 @@ try {
       : caught;
 
   if (error instanceof UserError) {
-    logger.error(`Error: ${error.message}`);
+    printError(error.message);
 
     process.exit(error.code === 'usage' ? EXIT_USAGE_ERROR : EXIT_USER_ERROR);
   }
 
-  logger.error(
+  printDiagnostic(
     error instanceof Error ? (error.stack ?? error.message) : String(error),
   );
 

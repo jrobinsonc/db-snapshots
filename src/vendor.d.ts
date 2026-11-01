@@ -3,19 +3,6 @@
  * own types. Only the parts this codebase uses are declared.
  */
 
-declare module 'clui' {
-  /** A terminal spinner shown while a long-running task is in progress. */
-  class Spinner {
-    constructor(message: string);
-    start(): void;
-    stop(): void;
-  }
-
-  const clui: { Spinner: typeof Spinner };
-
-  export default clui;
-}
-
 declare module 'configstore' {
   /** A persistent key-value store kept in the user's config directory. */
   export default class Configstore {

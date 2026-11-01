@@ -1,4 +1,3 @@
-import CLI from 'clui';
 import inquirer from 'inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,7 +5,8 @@ import config from '../config';
 import { DUMP_DIR } from '../constants';
 import { UserError, raise } from '../utils/exceptions';
 import getDumpFiles from '../utils/get-dump-files';
-import logger from '../utils/logger';
+import describeSnapshot from '../utils/describe-snapshot';
+import { progress } from '../utils/output';
 import runMySqlCommand from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
@@ -128,24 +128,18 @@ const create: Command = async ({ args }) => {
   }
 
   const connection = await config.getAppConnection();
-  const status = new CLI.Spinner('Creating dump file...');
 
-  try {
-    status.start();
+  progress('Creating dump file...');
 
-    await runMySqlCommand(
-      `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} --opt --dump-date ${connection.database} > ${dump.path}`,
-    );
+  await runMySqlCommand(
+    `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} --opt --dump-date ${connection.database} > ${dump.path}`,
+  );
 
-    status.stop();
-    logger.log(
-      `Dump file ${dump.exists ? 'updated' : 'created'}: ${dump.name}`,
-    );
-  } catch (error) {
-    status.stop();
-
-    throw error;
-  }
+  return {
+    kind: 'create',
+    snapshot: describeSnapshot(dump.name, dump.path),
+    overwritten: dump.exists,
+  };
 };
 
 export default create;

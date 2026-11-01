@@ -1,4 +1,3 @@
-import CLI from 'clui';
 import inquirer from 'inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,7 +5,8 @@ import config from '../config';
 import { DUMP_DIR } from '../constants';
 import { UserError } from '../utils/exceptions';
 import getDumpFiles from '../utils/get-dump-files';
-import logger from '../utils/logger';
+import describeSnapshot from '../utils/describe-snapshot';
+import { progress } from '../utils/output';
 import runMySqlCommand from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
@@ -21,11 +21,9 @@ interface DumpFile {
  * Retrieves a dump file
  *
  * @param dumpName - The name of the dump file to retrieve
- * @returns A promise that resolves with the dump file, or undefined if there are no dump files to choose from
+ * @returns A promise that resolves with the dump file
  */
-async function getDump(
-  dumpName: string | undefined,
-): Promise<DumpFile | undefined> {
+async function getDump(dumpName: string | undefined): Promise<DumpFile> {
   const dump: DumpFile = { name: '', path: '' };
 
   if (dumpName) {
@@ -37,9 +35,7 @@ async function getDump(
     const fileList = await getDumpFiles();
 
     if (fileList.length === 0) {
-      logger.error('No dump files found');
-
-      return;
+      throw new UserError('No dump files found', 'snapshot_not_found');
     }
 
     const answers = await inquirer.prompt<{ dumpName: string }>([
@@ -74,27 +70,22 @@ const load: Command = async ({ args }) => {
     dumpName === undefined ? undefined : String(dumpName),
   );
 
-  if (!dump) {
-    return;
-  }
-
   const connection = await config.getAppConnection();
-  const status = new CLI.Spinner('Loading dump file...');
+  const startedAt = Date.now();
 
-  try {
-    status.start();
+  progress('Loading dump file...');
 
-    await runMySqlCommand(
-      `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} ${connection.database} < ${dump.path}`,
-    );
+  await runMySqlCommand(
+    `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} ${connection.database} < ${dump.path}`,
+  );
 
-    status.stop();
-    logger.success(`Dump file imported: ${dump.name}`);
-  } catch (error) {
-    status.stop();
-
-    throw error;
-  }
+  return {
+    kind: 'load',
+    snapshot: describeSnapshot(dump.name, dump.path),
+    connection: connection.database,
+    dropped: false,
+    duration_ms: Date.now() - startedAt,
+  };
 };
 
 export default load;
