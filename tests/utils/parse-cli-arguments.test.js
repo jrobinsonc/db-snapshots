@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 import parseCliArguments from '../../src/utils/parse-cli-arguments.js';
 
 describe('utils/parseCliArguments', () => {

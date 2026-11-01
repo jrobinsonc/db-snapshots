@@ -48,8 +48,8 @@ module.exports = {
   overrides: [
     {
       files: ['**/*.test.js'],
-      env: {
-        jest: true,
+      rules: {
+        'import/no-unresolved': ['error', { ignore: ['^bun:'] }],
       },
     },
   ],

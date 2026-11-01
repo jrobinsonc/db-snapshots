@@ -22,7 +22,7 @@
   },
   "scripts": {
     "lint": "eslint src --max-warnings=0",
-    "test": "jest"
+    "test": "bun test"
   },
   "bin": {
     "dbs": "./index.js"
@@ -37,18 +37,14 @@
     "minimist": "^1.2.8"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.29.7",
-    "@types/jest": "^30.0.0",
+    "@types/bun": "^1.4.4",
     "@types/node": "^20.19.43",
-    "babel-jest": "^30.4.1",
-    "babel-plugin-transform-import-meta": "^2.3.3",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^8.10.2",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-jsdoc": "^46.10.1",
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-unicorn": "^48.0.1",
-    "jest": "^30.4.2",
     "prettier": "^3.9.4"
   },
   "engines": {
