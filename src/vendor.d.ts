@@ -53,12 +53,25 @@ declare module 'inquirer-autocomplete-prompt' {
   export default autocompletePrompt;
 }
 
-declare module 'minimist' {
-  /** The parsed arguments: positionals under `_`, flags under their own names. */
-  export interface ParsedArgs {
+declare module 'yargs' {
+  /** A parsed yargs argument vector. */
+  export interface Arguments {
     _: (string | number)[];
-    [flag: string]: unknown;
+    $0: string;
+    [key: string]: unknown;
   }
 
-  export default function minimist(args: string[]): ParsedArgs;
+  /** Buildable yargs instance. */
+  export interface Instance {
+    options(options: Record<string, unknown>): Instance;
+    option(name: string, configuration: Record<string, unknown>): Instance;
+    strictOptions(enabled: boolean): Instance;
+    exitProcess(enabled: boolean): Instance;
+    help(enabled?: boolean): Instance;
+    parseSync(argv?: string[]): Arguments;
+  }
+
+  const yargs: (argv?: string[]) => Instance;
+
+  export default yargs;
 }
