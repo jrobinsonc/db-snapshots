@@ -3,6 +3,7 @@ export const USER_ERROR_CODES = [
   'usage',
   'input_required',
   'config_not_found',
+  'config_invalid',
   'connection_not_found',
   'snapshot_not_found',
   'ambiguous_snapshot',

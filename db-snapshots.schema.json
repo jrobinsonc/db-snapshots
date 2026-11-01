@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DB Snapshots config",
+  "description": "Project config for the dbs CLI (.db-snapshots.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["connections"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to this schema, for editor autocomplete and validation."
+    },
+    "default_connection": {
+      "type": "string",
+      "description": "Name of the Connection used when none is given."
+    },
+    "storage": {
+      "type": "string",
+      "description": "Snapshot Storage directory, relative to the config file's directory.",
+      "default": "snapshots"
+    },
+    "connections": {
+      "type": "object",
+      "description": "Named Connections; at least one is required.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["driver"],
+        "properties": {
+          "driver": {
+            "type": "string",
+            "enum": ["mysql"],
+            "description": "The database engine this Connection speaks (mysql also covers MariaDB)."
+          },
+          "host": { "type": "string" },
+          "port": {
+            "type": ["integer", "string"],
+            "description": "Port number, or a string so it can be interpolated."
+          },
+          "user": { "type": "string" },
+          "password": {
+            "type": "string",
+            "description": "Use a ${VAR} reference rather than a literal password."
+          },
+          "database": { "type": "string" }
+        }
+      }
+    }
+  }
+}
