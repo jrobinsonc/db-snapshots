@@ -14,7 +14,7 @@ export interface Connection {
 
 const config = new Configstore('db');
 
-export default {
+const legacyConfig = {
   async getAppConnection(): Promise<Connection> {
     const key = `${getApp()}.connection`;
     // The store only ever holds values written by this function.
@@ -67,3 +67,13 @@ export default {
     return answers;
   },
 };
+/*DISCOVERY_SECTION*/
+import * as configDiscovery from './config/discovery';
+export * from './config/discovery';
+
+const discoveredConfig = Object.assign(
+  configDiscovery.default as any,
+  legacyConfig,
+  configDiscovery,
+);
+export default discoveredConfig;
