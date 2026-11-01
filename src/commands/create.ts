@@ -18,7 +18,7 @@ inquirer.registerPrompt('autocomplete', inquirerPrompt);
  *
  * @param name - The name of the dump file
  * @returns The formatted name
- * @throws {UserError} If the name is not given
+ * @throws If the name is not given
  */
 function formatFilename(name: string): string {
   return (name || raise(new UserError('No dump file name provided')))
