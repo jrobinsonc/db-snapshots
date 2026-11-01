@@ -7,18 +7,31 @@ interface TtyLike {
   isTTY?: boolean;
 }
 
+let colorDisabled = false;
+
+/** Turns color off for the rest of the process (the `--no-color` flag). */
+export function disableColor(): void {
+  colorDisabled = true;
+}
+
+/** Undoes {@link disableColor}. */
+export function enableColor(): void {
+  colorDisabled = false;
+}
+
 /**
  * Decides whether ANSI color should be used for a stream.
  *
  * @param stream - The stream the text will be written to.
  * @param env - The process environment.
- * @returns True when the stream is a TTY and `NO_COLOR` is not set.
+ * @returns True when the stream is a TTY and neither `--no-color` nor
+ *   `NO_COLOR` is set.
  */
 export function isColorEnabled(
   stream: TtyLike,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  if (env['NO_COLOR']) {
+  if (colorDisabled || env['NO_COLOR']) {
     return false;
   }
 

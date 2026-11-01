@@ -24,6 +24,7 @@ export function renderGeneralHelp(
     'Options:',
     '  --help, -h  Show help (also: dbs help <command>)',
     '  --version   Show the version',
+    '  --no-color  Disable colored output (also: NO_COLOR)',
   ].join('\n');
 }
 

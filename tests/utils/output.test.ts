@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   colorize,
+  disableColor,
+  enableColor,
   isColorEnabled,
   renderError,
   renderResult,
@@ -71,5 +73,20 @@ describe('renderResult', () => {
 describe('renderError', () => {
   test('prefixes the message', () => {
     expect(renderError('bad', false)).toBe('Error: bad');
+  });
+});
+
+describe('disableColor', () => {
+  test('turns color off even for a TTY', () => {
+    expect(isColorEnabled({ isTTY: true }, {})).toBe(true);
+
+    disableColor();
+
+    try {
+      expect(isColorEnabled({ isTTY: true }, {})).toBe(false);
+      expect(isColorEnabled({ isTTY: true }, { FORCE_COLOR: '1' })).toBe(false);
+    } finally {
+      enableColor();
+    }
   });
 });

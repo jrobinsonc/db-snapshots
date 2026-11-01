@@ -53,3 +53,10 @@ describe('cli help and version', () => {
     expect(output.trim()).toBe(pkg.version);
   });
 });
+
+describe('cli --no-color', () => {
+  test('is accepted as a global flag and listed in help', () => {
+    expect(runCli('--help').output).toContain('--no-color');
+    expect(runCli('--no-color', 'nope').output).toContain('nope');
+  });
+});

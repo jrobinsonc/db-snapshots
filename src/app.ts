@@ -2,7 +2,10 @@ import pkg from '../package.json';
 import { getCommand, listCommands } from './commands';
 import { UserError } from './utils/exceptions';
 import { renderCommandHelp, renderGeneralHelp } from './utils/help';
-import { printDiagnostic, printError, printResult } from './utils/output';
+import {
+  disableColor,
+  printDiagnostic, printError, printResult,
+} from './utils/output';
 import parseCliArguments from './utils/parse-cli-arguments';
 
 const CLI_ARGUMENT_OFFSET = 2;
@@ -11,7 +14,17 @@ const EXIT_USER_ERROR = 1;
 const EXIT_USAGE_ERROR = 2;
 
 try {
-  const commandLineArguments = process.argv.slice(CLI_ARGUMENT_OFFSET);
+  const rawArguments = process.argv.slice(CLI_ARGUMENT_OFFSET);
+
+  // `--no-color` is global: strip it so commands' strict option parsing
+  // doesn't reject it.
+  const commandLineArguments = rawArguments.filter(
+    (argument) => argument !== '--no-color',
+  );
+
+  if (commandLineArguments.length !== rawArguments.length) {
+    disableColor();
+  }
 
   if (commandLineArguments.includes('--version')) {
     console.log(pkg.version);
