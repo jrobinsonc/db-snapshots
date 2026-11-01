@@ -1,50 +1,48 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { ROOT_DIR } from './constants';
+import { getCommand } from './commands';
 import { UserError } from './utils/exceptions';
 import logger from './utils/logger';
-import parseCliArguments, {
-  type CliOptionDefinitions,
-} from './utils/parse-cli-arguments';
-import type { Command } from './types';
+import parseCliArguments from './utils/parse-cli-arguments';
 
 const CLI_ARGUMENT_OFFSET = 2;
+
+const EXIT_USER_ERROR = 1;
+const EXIT_USAGE_ERROR = 2;
 
 try {
   const commandLineArguments = process.argv.slice(CLI_ARGUMENT_OFFSET);
   const [commandName] = parseCliArguments(commandLineArguments);
 
-  if (!commandName) {
-    throw new UserError('Please provide a valid command');
+  if (typeof commandName !== 'string' || commandName.length === 0) {
+    throw new UserError('Please provide a valid command', 'usage');
   }
 
-  const commandFile = join(ROOT_DIR, 'src', 'commands', `${commandName}.ts`);
+  const command = getCommand(commandName);
 
-  if (!existsSync(commandFile)) {
-    throw new UserError(`Command "${commandName}" does not exist.`);
+  if (!command) {
+    throw new UserError(`Command "${commandName}" does not exist.`, 'usage');
   }
 
-  const importedCommand = (await import(commandFile)) as {
-    default: Command;
-    options?: CliOptionDefinitions;
-  };
-
-  const [, cmdArguments] = parseCliArguments(
+  const [, commandArguments] = parseCliArguments(
     commandLineArguments,
-    importedCommand.options ?? {},
+    command.options,
   );
 
-  await importedCommand.default({
-    args: cmdArguments,
-  });
+  await command.run({ args: commandArguments });
 } catch (error) {
-  if (
-    error instanceof UserError ||
-    (error instanceof Error && error.name === 'YError')
-  ) {
+  if (error instanceof UserError) {
     logger.error(`Error: ${error.message}`);
-    process.exit();
+
+    process.exit(error.code === 'usage' ? EXIT_USAGE_ERROR : EXIT_USER_ERROR);
   }
 
-  throw error;
+  // yargs rejects unknown or invalid flags with a YError.
+  if (error instanceof Error && error.name === 'YError') {
+    logger.error(`Error: ${error.message}`);
+
+    process.exit(EXIT_USAGE_ERROR);
+  }
+
+  logger.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+
+  process.exit(EXIT_USER_ERROR);
 }

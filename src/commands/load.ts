@@ -1,6 +1,5 @@
 import CLI from 'clui';
-import inquirer from 'inquirer';
-import inquirerPrompt from 'inquirer-autocomplete-prompt';
+import inquirer from '../utils/inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config';
@@ -10,8 +9,6 @@ import getDumpFiles from '../utils/get-dump-files';
 import logger from '../utils/logger';
 import runMySqlCommand from '../utils/run-mysql-command';
 import type { Command } from '../types';
-
-inquirer.registerPrompt('autocomplete', inquirerPrompt);
 
 interface DumpFile {
   /** The name of the dump file */
@@ -45,6 +42,7 @@ async function getDump(
       return;
     }
 
+
     const answers = await inquirer.prompt<{ dumpName: string }>([
       {
         type: 'autocomplete',
@@ -62,7 +60,7 @@ async function getDump(
   dump.path = join(DUMP_DIR, `${dump.name}.sql`);
 
   if (!existsSync(dump.path)) {
-    throw new UserError(`This dump file doesn't exist: ${dump.name}`);
+    throw new UserError(`This dump file doesn't exist: ${dump.name}`, 'snapshot_not_found');
   }
 
   return dump;

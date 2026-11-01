@@ -1,6 +1,5 @@
 import CLI from 'clui';
-import inquirer from 'inquirer';
-import inquirerPrompt from 'inquirer-autocomplete-prompt';
+import inquirer from '../utils/inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config';
@@ -11,8 +10,6 @@ import logger from '../utils/logger';
 import runMySqlCommand from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
-inquirer.registerPrompt('autocomplete', inquirerPrompt);
-
 /**
  * Formats a dump file name
  *
@@ -21,7 +18,7 @@ inquirer.registerPrompt('autocomplete', inquirerPrompt);
  * @throws If the name is not given
  */
 function formatFilename(name: string): string {
-  return (name || raise(new UserError('No dump file name provided')))
+  return (name || raise(new UserError('No dump file name provided', 'usage')))
     .trim()
     .replaceAll(/[^\da-z-]+/gi, '-')
     .replaceAll(/-+/g, '-');
