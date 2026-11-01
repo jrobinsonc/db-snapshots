@@ -1,5 +1,5 @@
 import CLI from 'clui';
-import inquirer from '../utils/inquirer';
+import inquirer from 'inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config';
@@ -45,7 +45,7 @@ async function getDump(
 
     const answers = await inquirer.prompt<{ dumpName: string }>([
       {
-        type: 'autocomplete',
+        type: 'search',
         name: 'dumpName',
         message: 'Select the dump:',
         source: (_, input = '') => {

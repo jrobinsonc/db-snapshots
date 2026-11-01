@@ -1,5 +1,5 @@
 import CLI from 'clui';
-import inquirer from '../utils/inquirer';
+import inquirer from 'inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config';
@@ -40,7 +40,7 @@ async function askDumpName(): Promise<string> {
     const { dumpName } = await inquirer.prompt<{ dumpName: string }>([
       {
         ...basePromptConfig,
-        type: 'autocomplete',
+        type: 'search',
         source: (_, searchText = '') => {
           const searchInputIsEmpty = searchText.length === 0;
           const filteredList = searchInputIsEmpty

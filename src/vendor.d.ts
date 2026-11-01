@@ -46,13 +46,6 @@ declare module 'inquirer' {
   export default inquirer;
 }
 
-declare module 'inquirer-autocomplete-prompt' {
-  /** The autocomplete prompt type, registered through `inquirer.registerPrompt`. */
-  const autocompletePrompt: unknown;
-
-  export default autocompletePrompt;
-}
-
 declare module 'yargs' {
   /** A parsed yargs argument vector. */
   export interface Arguments {
