@@ -1,4 +1,3 @@
-import inquirer from 'inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config';
@@ -7,6 +6,7 @@ import { UserError, raise } from '../utils/exceptions';
 import getDumpFiles from '../utils/get-dump-files';
 import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
+import { ask, confirm } from '../utils/prompt';
 import runMySqlCommand from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
@@ -37,7 +37,7 @@ async function askDumpName(): Promise<string> {
   };
 
   if (filesList.length > 0) {
-    const { dumpName } = await inquirer.prompt<{ dumpName: string }>([
+    const { dumpName } = await ask<{ dumpName: string }>([
       {
         ...basePromptConfig,
         type: 'search',
@@ -60,7 +60,7 @@ async function askDumpName(): Promise<string> {
     return dumpName;
   }
 
-  const { dumpName } = await inquirer.prompt<{ dumpName: string }>([
+  const { dumpName } = await ask<{ dumpName: string }>([
     {
       ...basePromptConfig,
       type: 'input',
@@ -100,16 +100,11 @@ async function getDump(
 
   // If the file already exists, ask if the user wants to overwrite it.
   if (dump.exists) {
-    const answers = await inquirer.prompt<{ confirmOverwrite: boolean }>([
-      {
-        type: 'confirm',
-        name: 'confirmOverwrite',
-        message: "You're sure you want to overwrite this file?",
-        default: true,
-      },
-    ]);
+    const confirmed = await confirm(
+      "You're sure you want to overwrite this file?",
+    );
 
-    if (!answers.confirmOverwrite) {
+    if (!confirmed) {
       return;
     }
   }

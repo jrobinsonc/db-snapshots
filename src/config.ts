@@ -1,7 +1,6 @@
 import Configstore from 'configstore';
-import inquirer from 'inquirer';
-
 import getApp from './utils/get-app';
+import { ask } from './utils/prompt';
 
 /** The settings used to connect to the app's database. */
 export interface Connection {
@@ -24,7 +23,7 @@ export default {
       return connection;
     }
 
-    const answers = await inquirer.prompt<Connection>([
+    const answers = await ask<Connection>([
       {
         type: 'input',
         name: 'host',

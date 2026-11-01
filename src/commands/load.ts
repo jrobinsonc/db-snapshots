@@ -1,4 +1,3 @@
-import inquirer from 'inquirer';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import config from '../config';
@@ -7,6 +6,7 @@ import { UserError } from '../utils/exceptions';
 import getDumpFiles from '../utils/get-dump-files';
 import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
+import { ask } from '../utils/prompt';
 import runMySqlCommand from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
@@ -38,7 +38,7 @@ async function getDump(dumpName: string | undefined): Promise<DumpFile> {
       throw new UserError('No dump files found', 'snapshot_not_found');
     }
 
-    const answers = await inquirer.prompt<{ dumpName: string }>([
+    const answers = await ask<{ dumpName: string }>([
       {
         type: 'search',
         name: 'dumpName',

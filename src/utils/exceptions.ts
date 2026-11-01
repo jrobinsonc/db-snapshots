@@ -1,6 +1,7 @@
 /** The stable set of error codes a user error may carry. */
 export const USER_ERROR_CODES = [
   'usage',
+  'input_required',
   'config_not_found',
   'connection_not_found',
   'snapshot_not_found',
