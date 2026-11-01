@@ -18,12 +18,12 @@ Edit the "Label in our tracker" column to match whatever vocabulary you actually
 
 Track an issue's estimated complexity with an additional `size:*` label, alongside its category and state role.
 
-| Size | Label     | Meaning              |
-| ---- | --------- | -------------------- |
-| XS   | `size:xs` | Extra small effort   |
-| S    | `size:s`  | Small effort         |
-| M    | `size:m`  | Medium effort        |
-| L    | `size:l`  | Large effort         |
-| XL   | `size:xl` | Extra large effort   |
+| Size | Label     | Meaning            |
+| ---- | --------- | ------------------ |
+| XS   | `size:xs` | Extra small effort |
+| S    | `size:s`  | Small effort       |
+| M    | `size:m`  | Medium effort      |
+| L    | `size:l`  | Large effort       |
+| XL   | `size:xl` | Extra large effort |
 
 An issue should carry at most one `size:*` label. The `triage` skill does not calculate these automatically; apply or update them during triage when the effort is clear.

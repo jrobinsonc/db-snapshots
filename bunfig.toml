@@ -1,0 +1,14 @@
+[lint]
+typeAware = true
+
+[lint.rules]
+eqeqeq = "warn"
+"no-console" = "warn"
+"no-magic-numbers" = ["warn", { ignore = [0] }]
+"unicorn/custom-error-definition" = "error"
+"unicorn/no-process-exit" = "off" # This is a CLI app.
+
+[fmt]
+semi = true
+singleQuote = true
+trailingComma = "all"
