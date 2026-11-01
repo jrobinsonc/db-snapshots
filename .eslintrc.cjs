@@ -1,8 +1,15 @@
 module.exports = {
   root: true,
   env: {
-    node: true,
     es2022: true,
+  },
+  // Bun is the runtime: it provides these globals (including Node-compatible ones).
+  globals: {
+    Bun: 'readonly',
+    console: 'readonly',
+    process: 'readonly',
+    setTimeout: 'readonly',
+    clearTimeout: 'readonly',
   },
   extends: [
     'eslint:recommended',
