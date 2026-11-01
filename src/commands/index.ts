@@ -6,13 +6,34 @@ import load, { options as loadOptions } from './load';
 /** A command together with the option declarations used to parse its flags. */
 export interface RegisteredCommand {
   run: Command;
+  /** One-line summary shown in help. */
+  description: string;
+  /** Positional arguments, as shown after the command name in help. */
+  usage: string;
   options: CliOptionDefinitions;
 }
 
 const commands: Readonly<Record<string, RegisteredCommand>> = {
-  create: { run: create, options: createOptions },
-  load: { run: load, options: loadOptions },
+  create: {
+    run: create,
+    options: createOptions,
+    description: 'Create a snapshot of the database.',
+    usage: '[name]',
+  },
+  load: {
+    run: load,
+    options: loadOptions,
+    description: 'Load a snapshot into the database.',
+    usage: '[name]',
+  },
 };
+
+/**
+ * @returns All registered commands keyed by name.
+ */
+export function listCommands(): Readonly<Record<string, RegisteredCommand>> {
+  return commands;
+}
 
 /**
  * Looks up a command in the static registry.

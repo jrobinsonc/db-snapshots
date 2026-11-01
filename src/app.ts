@@ -1,5 +1,7 @@
-import { getCommand } from './commands';
+import pkg from '../package.json';
+import { getCommand, listCommands } from './commands';
 import { UserError } from './utils/exceptions';
+import { renderCommandHelp, renderGeneralHelp } from './utils/help';
 import logger from './utils/logger';
 import parseCliArguments from './utils/parse-cli-arguments';
 
@@ -10,6 +12,37 @@ const EXIT_USAGE_ERROR = 2;
 
 try {
   const commandLineArguments = process.argv.slice(CLI_ARGUMENT_OFFSET);
+
+  if (commandLineArguments.includes('--version')) {
+    console.log(pkg.version);
+    process.exit(0);
+  }
+
+  const wantsHelp =
+    commandLineArguments.includes('--help') ||
+    commandLineArguments.includes('-h');
+  const positionals = commandLineArguments.filter(
+    (argument) => !argument.startsWith('-'),
+  );
+  const isHelpCommand = positionals[0] === 'help';
+  const helpTarget = isHelpCommand ? positionals[1] : positionals[0];
+
+  if (wantsHelp || isHelpCommand) {
+    if (helpTarget === undefined) {
+      console.log(renderGeneralHelp(listCommands()));
+      process.exit(0);
+    }
+
+    const target = getCommand(helpTarget);
+
+    if (!target) {
+      throw new UserError(`Command "${helpTarget}" does not exist.`, 'usage');
+    }
+
+    console.log(renderCommandHelp(helpTarget, target));
+    process.exit(0);
+  }
+
   const [commandName] = parseCliArguments(commandLineArguments);
 
   if (typeof commandName !== 'string' || commandName.length === 0) {
