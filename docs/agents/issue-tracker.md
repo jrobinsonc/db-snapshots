@@ -48,3 +48,12 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (see **Count open blockers**, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+## Finding the next ticket
+
+When asked to search for the next ticket to work on, first select the earliest open milestone, then pick the highest-priority unblocked open issue in that milestone:
+
+```sh
+milestone=$(gh api repos/jrobinsonc/db-snapshots/milestones --jq 'map(select(.state=="open")) | sort_by(.title) | .[0].title')
+gh issue list --search "-is:blocked is:open milestone:\"$milestone\" sort:priority" --limit 1 --json number,title
+```
