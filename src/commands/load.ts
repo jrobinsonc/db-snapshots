@@ -42,7 +42,6 @@ async function getDump(
       return;
     }
 
-
     const answers = await inquirer.prompt<{ dumpName: string }>([
       {
         type: 'search',
@@ -60,7 +59,10 @@ async function getDump(
   dump.path = join(DUMP_DIR, `${dump.name}.sql`);
 
   if (!existsSync(dump.path)) {
-    throw new UserError(`This dump file doesn't exist: ${dump.name}`, 'snapshot_not_found');
+    throw new UserError(
+      `This dump file doesn't exist: ${dump.name}`,
+      'snapshot_not_found',
+    );
   }
 
   return dump;

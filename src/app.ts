@@ -28,21 +28,22 @@ try {
   );
 
   await command.run({ args: commandArguments });
-} catch (error) {
+} catch (caught) {
+  // yargs rejects unknown or invalid flags with a YError.
+  const error =
+    caught instanceof Error && caught.name === 'YError'
+      ? new UserError(caught.message, 'usage')
+      : caught;
+
   if (error instanceof UserError) {
     logger.error(`Error: ${error.message}`);
 
     process.exit(error.code === 'usage' ? EXIT_USAGE_ERROR : EXIT_USER_ERROR);
   }
 
-  // yargs rejects unknown or invalid flags with a YError.
-  if (error instanceof Error && error.name === 'YError') {
-    logger.error(`Error: ${error.message}`);
-
-    process.exit(EXIT_USAGE_ERROR);
-  }
-
-  logger.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+  logger.error(
+    error instanceof Error ? (error.stack ?? error.message) : String(error),
+  );
 
   process.exit(EXIT_USER_ERROR);
 }
