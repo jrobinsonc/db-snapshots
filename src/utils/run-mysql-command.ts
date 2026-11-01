@@ -7,7 +7,7 @@ import { exec } from 'node:child_process';
  * @returns A Promise that resolves to true if the command is executed successfully.
  * @throws If there is an error or timeout during command execution.
  */
-export default function runMySqlCommand(command: string): Promise<boolean> {
+export default function runMySqlCommand(command: string, env?: NodeJS.ProcessEnv): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const maxExecutionTime = 30_000;
     const procTimeout = setTimeout(() => {
@@ -15,7 +15,7 @@ export default function runMySqlCommand(command: string): Promise<boolean> {
       reject(new Error('Timeout'));
     }, maxExecutionTime);
 
-    const proc = exec(command, (error, _, stderr) => {
+    const proc = exec(command, { env }, (error, _, stderr) => {
       if (stderr) {
         const matches = stderr.match(/ERROR (\d+) \((\w+)\): (.+)/);
         const matchesCount = 4;

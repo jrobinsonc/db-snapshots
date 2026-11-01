@@ -84,8 +84,11 @@ const load: Command = async ({ args }) => {
   try {
     status.start();
 
+    // 🛡️ Sentinel: Security fix to prevent exposing password in process list
+    // Passing password via environment variable (MYSQL_PWD) instead of command line args
     await runMySqlCommand(
-      `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} ${connection.database} < ${dump.path}`,
+      `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} ${connection.database} < ${dump.path}`,
+      { ...process.env, MYSQL_PWD: connection.password }
     );
 
     status.stop();

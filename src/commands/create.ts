@@ -133,8 +133,11 @@ const create: Command = async ({ args }) => {
   try {
     status.start();
 
+    // 🛡️ Sentinel: Security fix to prevent exposing password in process list
+    // Passing password via environment variable (MYSQL_PWD) instead of command line args
     await runMySqlCommand(
-      `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} --opt --dump-date ${connection.database} > ${dump.path}`,
+      `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} --opt --dump-date ${connection.database} > ${dump.path}`,
+      { ...process.env, MYSQL_PWD: connection.password }
     );
 
     status.stop();
