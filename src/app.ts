@@ -3,34 +3,45 @@ import { join } from 'node:path';
 import { ROOT_DIR } from './constants';
 import { UserError } from './utils/exceptions';
 import logger from './utils/logger';
-import parseCliArguments from './utils/parse-cli-arguments';
+import parseCliArguments, {
+  type CliOptionDefinitions,
+} from './utils/parse-cli-arguments';
 import type { Command } from './types';
 
 const CLI_ARGUMENT_OFFSET = 2;
-const [cmd, cmdArguments] = parseCliArguments(
-  process.argv.slice(CLI_ARGUMENT_OFFSET),
-);
 
 try {
-  if (!cmd) {
+  const commandLineArguments = process.argv.slice(CLI_ARGUMENT_OFFSET);
+  const [commandName] = parseCliArguments(commandLineArguments);
+
+  if (!commandName) {
     throw new UserError('Please provide a valid command');
   }
 
-  const commandFile = join(ROOT_DIR, 'src', 'commands', `${cmd}.ts`);
+  const commandFile = join(ROOT_DIR, 'src', 'commands', `${commandName}.ts`);
 
   if (!existsSync(commandFile)) {
-    throw new UserError(`Command "${cmd}" does not exist.`);
+    throw new UserError(`Command "${commandName}" does not exist.`);
   }
 
-  const { default: commandFunction } = (await import(commandFile)) as {
+  const importedCommand = (await import(commandFile)) as {
     default: Command;
+    options?: CliOptionDefinitions;
   };
 
-  await commandFunction({
+  const [, cmdArguments] = parseCliArguments(
+    commandLineArguments,
+    importedCommand.options ?? {},
+  );
+
+  await importedCommand.default({
     args: cmdArguments,
   });
 } catch (error) {
-  if (error instanceof UserError) {
+  if (
+    error instanceof UserError ||
+    (error instanceof Error && error.name === 'YError')
+  ) {
     logger.error(`Error: ${error.message}`);
     process.exit();
   }

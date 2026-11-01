@@ -98,3 +98,5 @@ const load: Command = async ({ args }) => {
 };
 
 export default load;
+
+export const options = {};

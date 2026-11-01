@@ -152,3 +152,5 @@ const create: Command = async ({ args }) => {
 };
 
 export default create;
+
+export const options = {};
