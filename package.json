@@ -9,7 +9,7 @@
   ],
   "homepage": "https://github.com/jrobinsonc/db-snapshots/#readme",
   "version": "0.1.0",
-  "main": "index.js",
+  "main": "index.ts",
   "license": "MIT",
   "author": "Jose Robinson <me@joserobinson.com> (https://joserobinson.com/)",
   "type": "module",
@@ -25,7 +25,7 @@
     "test": "bun test"
   },
   "bin": {
-    "dbs": "./index.js"
+    "dbs": "./index.ts"
   },
   "dependencies": {
     "chalk": "^5.6.2",
@@ -38,7 +38,6 @@
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
-    "@types/node": "^20.19.43",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^8.10.2",
     "eslint-plugin-import": "^2.32.0",

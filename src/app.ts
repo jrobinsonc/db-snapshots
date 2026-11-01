@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { ROOT_DIR } from './constants.js';
-import { UserError } from './utils/exceptions.js';
-import logger from './utils/logger.js';
-import parseCliArguments from './utils/parse-cli-arguments.js';
+import { ROOT_DIR } from './constants';
+import { UserError } from './utils/exceptions';
+import logger from './utils/logger';
+import parseCliArguments from './utils/parse-cli-arguments';
+import type { Command } from './types';
 
 const CLI_ARGUMENT_OFFSET = 2;
 const [cmd, cmdArguments] = parseCliArguments(
@@ -15,13 +16,15 @@ try {
     throw new UserError('Please provide a valid command');
   }
 
-  const commandFile = join(ROOT_DIR, 'src', 'commands', `${cmd}.js`);
+  const commandFile = join(ROOT_DIR, 'src', 'commands', `${cmd}.ts`);
 
   if (!existsSync(commandFile)) {
     throw new UserError(`Command "${cmd}" does not exist.`);
   }
 
-  const { default: commandFunction } = await import(commandFile);
+  const { default: commandFunction } = (await import(commandFile)) as {
+    default: Command;
+  };
 
   await commandFunction({
     args: cmdArguments,

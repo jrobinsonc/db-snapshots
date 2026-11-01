@@ -1,20 +1,30 @@
 import Configstore from 'configstore';
 import inquirer from 'inquirer';
 
-import getApp from './utils/get-app.js';
+import getApp from './utils/get-app';
+
+/** The settings used to connect to the app's database. */
+export interface Connection {
+  host: string;
+  user: string;
+  password: string;
+  database: string;
+  port: string | number;
+}
 
 const config = new Configstore('db');
 
 export default {
-  async getAppConnection() {
+  async getAppConnection(): Promise<Connection> {
     const key = `${getApp()}.connection`;
-    const connection = config.get(key);
+    // The store only ever holds values written by this function.
+    const connection = config.get(key) as Connection | undefined;
 
     if (connection !== undefined) {
       return connection;
     }
 
-    const answers = await inquirer.prompt([
+    const answers = await inquirer.prompt<Connection>([
       {
         type: 'input',
         name: 'host',

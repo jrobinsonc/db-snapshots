@@ -3,23 +3,33 @@ import inquirer from 'inquirer';
 import inquirerPrompt from 'inquirer-autocomplete-prompt';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import config from '../config.js';
-import { DUMP_DIR } from '../constants.js';
-import { UserError } from '../utils/exceptions.js';
-import getDumpFiles from '../utils/get-dump-files.js';
-import logger from '../utils/logger.js';
-import runMySqlCommand from '../utils/run-mysql-command.js';
+import config from '../config';
+import { DUMP_DIR } from '../constants';
+import { UserError } from '../utils/exceptions';
+import getDumpFiles from '../utils/get-dump-files';
+import logger from '../utils/logger';
+import runMySqlCommand from '../utils/run-mysql-command';
+import type { Command } from '../types';
 
 inquirer.registerPrompt('autocomplete', inquirerPrompt);
+
+interface DumpFile {
+  /** The name of the dump file */
+  name: string;
+  /** The path to the dump file */
+  path: string;
+}
 
 /**
  * Retrieves a dump file
  *
- * @param {string} dumpName - The name of the dump file to retrieve
- * @returns {Promise<object>} A promise that resolves with the dump file
+ * @param dumpName - The name of the dump file to retrieve
+ * @returns A promise that resolves with the dump file, or undefined if there are no dump files to choose from
  */
-async function getDump(dumpName) {
-  const dump = { name: '', path: '' };
+async function getDump(
+  dumpName: string | undefined,
+): Promise<DumpFile | undefined> {
+  const dump: DumpFile = { name: '', path: '' };
 
   if (dumpName) {
     dump.name = dumpName
@@ -35,7 +45,7 @@ async function getDump(dumpName) {
       return;
     }
 
-    const answers = await inquirer.prompt([
+    const answers = await inquirer.prompt<{ dumpName: string }>([
       {
         type: 'autocomplete',
         name: 'dumpName',
@@ -58,8 +68,11 @@ async function getDump(dumpName) {
   return dump;
 }
 
-export default async ({ args }) => {
-  const dump = await getDump(args.get(0));
+const load: Command = async ({ args }) => {
+  const dumpName = args.get(0);
+  const dump = await getDump(
+    dumpName === undefined ? undefined : String(dumpName),
+  );
 
   if (!dump) {
     return;
@@ -83,3 +96,5 @@ export default async ({ args }) => {
     throw error;
   }
 };
+
+export default load;

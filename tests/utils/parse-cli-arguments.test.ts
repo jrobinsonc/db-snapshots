@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import parseCliArguments from '../../src/utils/parse-cli-arguments.js';
+import parseCliArguments from '../../src/utils/parse-cli-arguments';
 
 describe('utils/parseCliArguments', () => {
   test('it should parse named arguments and boolean flags into a map object', () => {
@@ -12,7 +12,7 @@ describe('utils/parseCliArguments', () => {
       '--disable-keys',
       '--tables=users,posts',
     ];
-    const expectedMap = new Map([
+    const expectedMap = new Map<string | number, unknown>([
       ['a', true],
       ['b', true],
       ['c', true],
@@ -41,7 +41,7 @@ describe('utils/parseCliArguments', () => {
   // test('it should overwrite boolean flags with named arguments', () => {
   //   const namedArgs = { flag1: 'value1' };
   //   const booleanArgs = ['flag1'];
-  //   const expectedMap = new Map([['flag1', 'value1']]);
+  //   const expectedMap = new Map<string | number, unknown>([['flag1', 'value1']]);
 
   //   expect(parseCliArguments(namedArgs, booleanArgs)).toEqual(expectedMap);
   // });

@@ -3,11 +3,11 @@ import { exec } from 'node:child_process';
 /**
  * Executes an SQL command using a child process and returns a Promise.
  *
- * @param {string} command - The SQL command to be executed.
- * @returns {Promise<boolean>} A Promise that resolves to true if the command is executed successfully.
- * @throws {Error} If there is an error or timeout during command execution.
+ * @param command - The SQL command to be executed.
+ * @returns A Promise that resolves to true if the command is executed successfully.
+ * @throws If there is an error or timeout during command execution.
  */
-export default function runMySqlCommand(command) {
+export default function runMySqlCommand(command: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const maxExecutionTime = 30_000;
     const procTimeout = setTimeout(() => {

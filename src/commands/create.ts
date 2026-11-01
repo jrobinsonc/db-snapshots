@@ -3,23 +3,24 @@ import inquirer from 'inquirer';
 import inquirerPrompt from 'inquirer-autocomplete-prompt';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import config from '../config.js';
-import { DUMP_DIR } from '../constants.js';
-import { UserError, raise } from '../utils/exceptions.js';
-import getDumpFiles from '../utils/get-dump-files.js';
-import logger from '../utils/logger.js';
-import runMySqlCommand from '../utils/run-mysql-command.js';
+import config from '../config';
+import { DUMP_DIR } from '../constants';
+import { UserError, raise } from '../utils/exceptions';
+import getDumpFiles from '../utils/get-dump-files';
+import logger from '../utils/logger';
+import runMySqlCommand from '../utils/run-mysql-command';
+import type { Command } from '../types';
 
 inquirer.registerPrompt('autocomplete', inquirerPrompt);
 
 /**
  * Formats a dump file name
  *
- * @param {string} name - The name of the dump file
- * @returns {string} The formatted name
+ * @param name - The name of the dump file
+ * @returns The formatted name
  * @throws {UserError} If the name is not given
  */
-function formatFilename(name) {
+function formatFilename(name: string): string {
   return (name || raise(new UserError('No dump file name provided')))
     .trim()
     .replaceAll(/[^\da-z-]+/gi, '-')
@@ -29,9 +30,9 @@ function formatFilename(name) {
 /**
  * Ask dump file name
  *
- * @returns {Promise<string>} Promise that resolves with the dump file name
+ * @returns Promise that resolves with the dump file name
  */
-async function askDumpName() {
+async function askDumpName(): Promise<string> {
   const filesList = await getDumpFiles();
   const basePromptConfig = {
     name: 'dumpName',
@@ -39,7 +40,7 @@ async function askDumpName() {
   };
 
   if (filesList.length > 0) {
-    const { dumpName } = await inquirer.prompt([
+    const { dumpName } = await inquirer.prompt<{ dumpName: string }>([
       {
         ...basePromptConfig,
         type: 'autocomplete',
@@ -62,7 +63,7 @@ async function askDumpName() {
     return dumpName;
   }
 
-  const { dumpName } = await inquirer.prompt([
+  const { dumpName } = await inquirer.prompt<{ dumpName: string }>([
     {
       ...basePromptConfig,
       type: 'input',
@@ -72,21 +73,25 @@ async function askDumpName() {
   return dumpName;
 }
 
-/**
- * @typedef {object} DumpFile
- * @property {string} name - The name of the dump file
- * @property {string} path - The path to the dump file
- * @property {boolean} exists - Whether or not the dump file exists
- */
+interface DumpFile {
+  /** The name of the dump file */
+  name: string;
+  /** The path to the dump file */
+  path: string;
+  /** Whether or not the dump file exists */
+  exists: boolean;
+}
 
 /**
  * Retrieves a dump file
  *
- * @param {string|undefined} dumpName - The name of the dump file to retrieve
- * @returns {Promise<DumpFile|null>} A promise that resolves with the dump file or null
+ * @param dumpName - The name of the dump file to retrieve
+ * @returns A promise that resolves with the dump file, or undefined if the user declines to overwrite it
  */
-async function getDump(dumpName) {
-  const dump = {
+async function getDump(
+  dumpName: string | undefined,
+): Promise<DumpFile | undefined> {
+  const dump: DumpFile = {
     name: dumpName || (await askDumpName()),
     path: '',
     exists: false,
@@ -98,7 +103,7 @@ async function getDump(dumpName) {
 
   // If the file already exists, ask if the user wants to overwrite it.
   if (dump.exists) {
-    const answers = await inquirer.prompt([
+    const answers = await inquirer.prompt<{ confirmOverwrite: boolean }>([
       {
         type: 'confirm',
         name: 'confirmOverwrite',
@@ -115,8 +120,11 @@ async function getDump(dumpName) {
   return dump;
 }
 
-export default async ({ args }) => {
-  const dump = await getDump(args.get(0));
+const create: Command = async ({ args }) => {
+  const dumpName = args.get(0);
+  const dump = await getDump(
+    dumpName === undefined ? undefined : String(dumpName),
+  );
 
   if (!dump) {
     return;
@@ -142,3 +150,5 @@ export default async ({ args }) => {
     throw error;
   }
 };
+
+export default create;

@@ -1,5 +1,5 @@
 export class UserError extends Error {
-  constructor(message) {
+  constructor(message: string) {
     super(message);
 
     Error.captureStackTrace(this, this.constructor);
@@ -11,9 +11,9 @@ export class UserError extends Error {
 /**
  * Raises an error
  *
- * @param {UserError} error - Error instance
- * @returns {never} throws error
+ * @param error - Error instance
+ * @returns never; it always throws the error
  */
-export function raise(error) {
+export function raise(error: UserError): never {
   throw error;
 }
