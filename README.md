@@ -2,6 +2,9 @@
 
 Quickly create and load a database snapshots.
 
+> [!WARNING]
+> This project is in a very early stage and is **not ready to be used by any means**. Expect missing features, breaking changes and bugs. Do not use it, especially against databases that hold data you care about.
+
 ## Requirements
 
 - [MySQL client CLI v8+](https://dev.mysql.com/doc/mysql-shell/en/mysql-shell-install.html)
