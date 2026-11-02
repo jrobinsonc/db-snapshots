@@ -18,8 +18,6 @@ declare module 'inquirer' {
   const inquirer: {
     /** Asks the given questions and resolves with the answers, keyed by question name. */
     prompt<Answers>(questions: Question[]): Promise<Answers>;
-    /** Registers a custom prompt type. */
-    registerPrompt(name: string, prompt: unknown): void;
   };
 
   export default inquirer;
