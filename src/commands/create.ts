@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import config from '../config';
 import { DUMP_DIR } from '../constants';
 import { UserError, raise } from '../utils/exceptions';
 import getDumpFiles from '../utils/get-dump-files';
 import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
 import { ask, confirm } from '../utils/prompt';
-import runMySqlCommand from '../utils/run-mysql-command';
+import { resolveProjectConnection } from '../utils/resolve-connection';
+import runMySqlCommand, { clientArgs } from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
 /**
@@ -113,6 +113,8 @@ async function getDump(
 }
 
 const create: Command = async ({ args }) => {
+  // Resolved first so a config problem fails before any Snapshot prompt.
+  const { connection } = await resolveProjectConnection();
   const dumpName = args.get(0);
   const dump = await getDump(
     dumpName === undefined ? undefined : String(dumpName),
@@ -122,12 +124,10 @@ const create: Command = async ({ args }) => {
     return;
   }
 
-  const connection = await config.getAppConnection();
-
   progress('Creating dump file...');
 
   await runMySqlCommand(
-    `mysqldump -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} --opt --dump-date ${connection.database} > ${dump.path}`,
+    `mysqldump ${clientArgs(connection)} --opt --dump-date > ${dump.path}`,
   );
 
   return {

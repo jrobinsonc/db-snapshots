@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import config from '../config';
 import { DUMP_DIR } from '../constants';
 import { UserError } from '../utils/exceptions';
 import getDumpFiles from '../utils/get-dump-files';
 import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
 import { ask } from '../utils/prompt';
-import runMySqlCommand from '../utils/run-mysql-command';
+import { resolveProjectConnection } from '../utils/resolve-connection';
+import runMySqlCommand, { clientArgs } from '../utils/run-mysql-command';
 import type { Command } from '../types';
 
 interface DumpFile {
@@ -70,19 +70,17 @@ const load: Command = async ({ args }) => {
     dumpName === undefined ? undefined : String(dumpName),
   );
 
-  const connection = await config.getAppConnection();
+  const { name, connection } = await resolveProjectConnection();
   const startedAt = Date.now();
 
   progress('Loading dump file...');
 
-  await runMySqlCommand(
-    `mysql -h ${connection.host} -P ${connection.port} -u ${connection.user} -p${connection.password} ${connection.database} < ${dump.path}`,
-  );
+  await runMySqlCommand(`mysql ${clientArgs(connection)} < ${dump.path}`);
 
   return {
     kind: 'load',
     snapshot: describeSnapshot(dump.name, dump.path),
-    connection: connection.database,
+    connection: name,
     dropped: false,
     duration_ms: Date.now() - startedAt,
   };

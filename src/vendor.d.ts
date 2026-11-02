@@ -20,6 +20,7 @@ declare module 'inquirer' {
     message?: string;
     default?: unknown;
     validate?: (input: string) => true | string;
+    choices?: string[];
     source?: (answers: unknown, input?: string) => string[] | Promise<string[]>;
   }
 
