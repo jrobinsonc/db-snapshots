@@ -36,8 +36,19 @@ export interface LoadResult {
   duration_ms: number;
 }
 
+/** The outcome of `init`. */
+export interface InitResult {
+  kind: 'init';
+  /** Absolute path of the written config file. */
+  config_file: string;
+  /** Name of the Connection that was written. */
+  connection: string;
+  /** Env var the typed password must be put in, or null when none was typed. */
+  password_env_var: string | null;
+}
+
 /** What a command returns for the output layer to render. */
-export type CommandResult = CreateResult | LoadResult;
+export type CommandResult = CreateResult | LoadResult | InitResult;
 
 /** A command module's default export. Resolves to undefined when there is nothing to report. */
 export type Command = (

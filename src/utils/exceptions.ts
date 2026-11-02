@@ -4,6 +4,7 @@ export const USER_ERROR_CODES = [
   'input_required',
   'config_not_found',
   'config_invalid',
+  'config_exists',
   'connection_not_found',
   'snapshot_not_found',
   'ambiguous_snapshot',

@@ -79,6 +79,25 @@ export function renderResult(result: CommandResult, color: boolean): string {
         color,
       );
     }
+    case 'init': {
+      const written = colorize(
+        `Config written: ${result.config_file}`,
+        'green',
+        color,
+      );
+
+      if (result.password_env_var === null) {
+        return written;
+      }
+
+      const advice = colorize(
+        `The password was not written to the config. Add ${result.password_env_var}=<your password> to .env and keep .env out of version control.`,
+        'yellow',
+        color,
+      );
+
+      return `${written}\n${advice}`;
+    }
   }
 }
 

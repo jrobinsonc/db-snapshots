@@ -1,6 +1,7 @@
 import type { Command } from '../types';
 import type { CliOptionDefinitions } from '../utils/parse-cli-arguments';
 import create, { options as createOptions } from './create';
+import init, { options as initOptions } from './init';
 import load, { options as loadOptions } from './load';
 
 /** A command together with the option declarations used to parse its flags. */
@@ -14,6 +15,12 @@ export interface RegisteredCommand {
 }
 
 const commands: Readonly<Record<string, RegisteredCommand>> = {
+  init: {
+    run: init,
+    options: initOptions,
+    description: 'Create a .db-snapshots.json config interactively.',
+    usage: '',
+  },
   create: {
     run: create,
     options: createOptions,

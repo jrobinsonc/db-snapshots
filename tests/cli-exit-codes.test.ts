@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import fs from 'node:fs';
+import os from 'node:os';
 import { join } from 'node:path';
 
 const ENTRYPOINT = join(import.meta.dir, '..', 'index.ts');
@@ -56,6 +58,24 @@ describe('cli exit codes', () => {
     expect(exitCode).not.toBe(2);
     expect(output).toContain('boom from test');
     expect(output).toContain('at ');
+  });
+
+  test('init without a terminal fails because input is required, writing nothing', () => {
+    const cwd = fs.realpathSync(fs.mkdtempSync(join(os.tmpdir(), 'dbs-')));
+
+    try {
+      const result = Bun.spawnSync(['bun', ENTRYPOINT, 'init'], {
+        cwd,
+        stdin: 'ignore',
+      });
+      const output = `${result.stdout.toString()}${result.stderr.toString()}`;
+
+      expect(result.exitCode).toBe(1);
+      expect(output).toContain('Input required');
+      expect(fs.readdirSync(cwd)).toEqual([]);
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   test('a successful command exits 0', () => {

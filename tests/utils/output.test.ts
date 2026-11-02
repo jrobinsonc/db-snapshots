@@ -68,6 +68,36 @@ describe('renderResult', () => {
       ),
     ).toBe('Dump file imported: baseline');
   });
+
+  test('reports a written config', () => {
+    expect(
+      renderResult(
+        {
+          kind: 'init',
+          config_file: '/app/.db-snapshots.json',
+          connection: 'local',
+          password_env_var: null,
+        },
+        false,
+      ),
+    ).toBe('Config written: /app/.db-snapshots.json');
+  });
+
+  test('a written config with a moved password advises putting it in .env', () => {
+    const text = renderResult(
+      {
+        kind: 'init',
+        config_file: '/app/.db-snapshots.json',
+        connection: 'local',
+        password_env_var: 'DB_PASSWORD',
+      },
+      false,
+    );
+
+    expect(text).toStartWith('Config written: /app/.db-snapshots.json\n');
+    expect(text).toContain('DB_PASSWORD=');
+    expect(text).toContain('.env');
+  });
 });
 
 describe('renderError', () => {
