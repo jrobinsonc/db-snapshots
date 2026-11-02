@@ -9,6 +9,8 @@ export interface RunOptions {
    * the run settles only after it does. Without it, stdout is discarded.
    */
   stdout?: (output: ReadableStream<Uint8Array>) => Promise<unknown>;
+  /** Variables added to the inherited environment. */
+  env?: Record<string, string>;
 }
 
 /** What a successful run reports. */
@@ -56,6 +58,7 @@ interface RunnerDeps {
     options: {
       stdin: Blob | ReadableStream<Uint8Array> | 'ignore';
       stdout: 'pipe' | 'ignore';
+      env: Record<string, string>;
     },
   ) => SpawnedProcess;
 }
@@ -82,6 +85,7 @@ export function createRunner(deps: RunnerDeps): ProcessRunner {
         proc = deps.spawn(command, {
           stdin: options.stdin ?? 'ignore',
           stdout: options.stdout ? 'pipe' : 'ignore',
+          env: options.env ?? {},
         });
       } catch (error) {
         if ((error as { code?: unknown }).code === 'ENOENT') {
@@ -157,6 +161,10 @@ async function readText(
 /** The runner every command uses. */
 export const runner: ProcessRunner = createRunner({
   which: (binary) => Bun.which(binary),
-  spawn: (command, options) =>
-    Bun.spawn(command, { ...options, stderr: 'pipe' }),
+  spawn: (command, { env, ...options }) =>
+    Bun.spawn(command, {
+      ...options,
+      env: { ...process.env, ...env },
+      stderr: 'pipe',
+    }),
 });

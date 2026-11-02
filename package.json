@@ -41,7 +41,6 @@
     "dbs": "./index.ts"
   },
   "dependencies": {
-    "configstore": "^6.0.0",
     "inquirer": "^14.2.5",
     "yargs": "^18.2.0"
   },

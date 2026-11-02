@@ -1,15 +1,17 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { DUMP_DIR } from '../constants';
+import { getDriver } from '../drivers';
 import { UserError, raise } from '../utils/exceptions';
-import getDumpFiles from '../utils/get-dump-files';
 import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
-import { ask, confirm } from '../utils/prompt';
+import { confirm } from '../utils/prompt';
 import { resolveProjectConnection } from '../utils/resolve-connection';
-import { clientArgs } from '../utils/mysql-client-args';
 import { runner } from '../utils/process-runner';
+import { writeSnapshotFile } from '../utils/snapshot-header';
+import type { SnapshotHeader } from '../utils/snapshot-header';
 import type { Command } from '../types';
+
+const TIMESTAMP_PART_WIDTH = 2;
 
 /**
  * Formats a dump file name
@@ -26,49 +28,27 @@ function formatFilename(name: string): string {
 }
 
 /**
- * Ask dump file name
+ * Names an Automatic Snapshot after its Connection and creation time.
  *
- * @returns Promise that resolves with the dump file name
+ * @param connection - The Connection name.
+ * @param created - The creation time, formatted in local time.
+ * @returns For example `local_2026-10-31_21-30-00`.
  */
-async function askDumpName(): Promise<string> {
-  const filesList = await getDumpFiles();
-  const basePromptConfig = {
-    name: 'dumpName',
-    message: 'Please enter the name for the dump file:',
-  };
+function automaticSnapshotName(connection: string, created: Date): string {
+  const pad = (value: number): string =>
+    String(value).padStart(TIMESTAMP_PART_WIDTH, '0');
+  const date = [
+    created.getFullYear(),
+    pad(created.getMonth() + 1),
+    pad(created.getDate()),
+  ].join('-');
+  const time = [
+    pad(created.getHours()),
+    pad(created.getMinutes()),
+    pad(created.getSeconds()),
+  ].join('-');
 
-  if (filesList.length > 0) {
-    const { dumpName } = await ask<{ dumpName: string }>([
-      {
-        ...basePromptConfig,
-        type: 'search',
-        source: (_, searchText = '') => {
-          const searchInputIsEmpty = searchText.length === 0;
-          const filteredList = searchInputIsEmpty
-            ? filesList
-            : filesList.filter((element) => element.includes(searchText));
-          const hasResults = filteredList.length > 0;
-
-          if (!searchInputIsEmpty && !hasResults) {
-            return [searchText];
-          }
-
-          return filteredList;
-        },
-      },
-    ]);
-
-    return dumpName;
-  }
-
-  const { dumpName } = await ask<{ dumpName: string }>([
-    {
-      ...basePromptConfig,
-      type: 'input',
-    },
-  ]);
-
-  return dumpName;
+  return `${connection}_${date}_${time}`;
 }
 
 interface DumpFile {
@@ -81,26 +61,21 @@ interface DumpFile {
 }
 
 /**
- * Retrieves a dump file
+ * Locates the Snapshot file for a Snapshot Name in the Snapshot Storage.
  *
- * @param dumpName - The name of the dump file to retrieve
+ * @param name - The Snapshot Name.
+ * @param storage - The Snapshot Storage directory.
  * @returns A promise that resolves with the dump file, or undefined if the user declines to overwrite it
  */
 async function getDump(
-  dumpName: string | undefined,
+  name: string,
+  storage: string,
 ): Promise<DumpFile | undefined> {
-  const dump: DumpFile = {
-    name: dumpName || (await askDumpName()),
-    path: '',
-    exists: false,
-  };
-
-  dump.name = formatFilename(dump.name);
-  dump.path = join(DUMP_DIR, `${dump.name}.sql`);
-  dump.exists = existsSync(dump.path);
+  const path = join(storage, `${name}.sql`);
+  const exists = existsSync(path);
 
   // If the file already exists, ask if the user wants to overwrite it.
-  if (dump.exists) {
+  if (exists) {
     const confirmed = await confirm(
       "You're sure you want to overwrite this file?",
     );
@@ -110,34 +85,50 @@ async function getDump(
     }
   }
 
-  return dump;
+  return { name, path, exists };
 }
 
 const create: Command = async ({ args }) => {
   // Resolved first so a config problem fails before any Snapshot prompt.
-  const { connection } = await resolveProjectConnection();
+  const {
+    name: connectionName,
+    connection,
+    config,
+  } = await resolveProjectConnection();
+  const driver = getDriver(connection.driver);
 
-  runner.preflight('mysqldump');
+  runner.preflight(driver.binaries.dump);
 
-  const dumpName = args.get(0);
+  const created = new Date();
+  const nameArgument = args.get(0);
   const dump = await getDump(
-    dumpName === undefined ? undefined : String(dumpName),
+    nameArgument === undefined
+      ? automaticSnapshotName(connectionName, created)
+      : formatFilename(String(nameArgument)),
+    config.storage,
   );
 
   if (!dump) {
     return;
   }
 
+  const header: SnapshotHeader = {
+    driver: driver.name,
+    connection: connectionName,
+    created,
+  };
+
+  mkdirSync(config.storage, { recursive: true });
+
   progress('Creating dump file...');
 
-  await runner.run(
-    ['mysqldump', ...clientArgs(connection), '--opt', '--dump-date'],
-    { stdout: (output) => Bun.write(dump.path, new Response(output)) },
-  );
+  await driver.dump(connection, {
+    stdout: (output) => writeSnapshotFile(dump.path, header, output),
+  });
 
   return {
     kind: 'create',
-    snapshot: describeSnapshot(dump.name, dump.path),
+    snapshot: describeSnapshot(dump.name, dump.path, header),
     overwritten: dump.exists,
   };
 };

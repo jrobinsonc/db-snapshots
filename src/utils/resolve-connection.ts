@@ -146,8 +146,12 @@ export const resolveConnection = createConnectionResolver({ ask: promptAsk });
 /**
  * Finds and loads the project config, then resolves the Connection to use.
  *
- * @returns The Connection and its name.
+ * @returns The Connection and its name, with the config it came from.
  */
-export function resolveProjectConnection(): Promise<ResolvedConnection> {
-  return resolveConnection(loadConfig(findConfigFile()));
+export async function resolveProjectConnection(): Promise<
+  ResolvedConnection & { config: ProjectConfig }
+> {
+  const config = loadConfig(findConfigFile());
+
+  return { ...(await resolveConnection(config)), config };
 }

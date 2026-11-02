@@ -3,15 +3,6 @@
  * own types. Only the parts this codebase uses are declared.
  */
 
-declare module 'configstore' {
-  /** A persistent key-value store kept in the user's config directory. */
-  export default class Configstore {
-    constructor(id: string);
-    get(key: string): unknown;
-    set(key: string, value: unknown): void;
-  }
-}
-
 declare module 'inquirer' {
   /** A single prompt shown to the user. */
   export interface Question {

@@ -7,7 +7,7 @@ import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
 import { ask } from '../utils/prompt';
 import { resolveProjectConnection } from '../utils/resolve-connection';
-import { clientArgs } from '../utils/mysql-client-args';
+import { getDriver } from '../drivers';
 import { runner } from '../utils/process-runner';
 import type { Command } from '../types';
 
@@ -72,16 +72,15 @@ const load: Command = async ({ args }) => {
   );
 
   const { name, connection } = await resolveProjectConnection();
+  const driver = getDriver(connection.driver);
 
-  runner.preflight('mysql');
+  runner.preflight(driver.binaries.load);
 
   const startedAt = Date.now();
 
   progress('Loading dump file...');
 
-  await runner.run(['mysql', ...clientArgs(connection)], {
-    stdin: Bun.file(dump.path),
-  });
+  await driver.load(connection, { input: Bun.file(dump.path) });
 
   return {
     kind: 'load',
