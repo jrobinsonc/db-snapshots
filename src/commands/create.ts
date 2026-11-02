@@ -7,7 +7,8 @@ import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
 import { ask, confirm } from '../utils/prompt';
 import { resolveProjectConnection } from '../utils/resolve-connection';
-import runMySqlCommand, { clientArgs } from '../utils/run-mysql-command';
+import { clientArgs } from '../utils/mysql-client-args';
+import { runner } from '../utils/process-runner';
 import type { Command } from '../types';
 
 /**
@@ -115,6 +116,9 @@ async function getDump(
 const create: Command = async ({ args }) => {
   // Resolved first so a config problem fails before any Snapshot prompt.
   const { connection } = await resolveProjectConnection();
+
+  runner.preflight('mysqldump');
+
   const dumpName = args.get(0);
   const dump = await getDump(
     dumpName === undefined ? undefined : String(dumpName),
@@ -126,8 +130,9 @@ const create: Command = async ({ args }) => {
 
   progress('Creating dump file...');
 
-  await runMySqlCommand(
-    `mysqldump ${clientArgs(connection)} --opt --dump-date > ${dump.path}`,
+  await runner.run(
+    ['mysqldump', ...clientArgs(connection), '--opt', '--dump-date'],
+    { stdout: (output) => Bun.write(dump.path, new Response(output)) },
   );
 
   return {

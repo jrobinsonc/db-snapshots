@@ -7,7 +7,8 @@ import describeSnapshot from '../utils/describe-snapshot';
 import { progress } from '../utils/output';
 import { ask } from '../utils/prompt';
 import { resolveProjectConnection } from '../utils/resolve-connection';
-import runMySqlCommand, { clientArgs } from '../utils/run-mysql-command';
+import { clientArgs } from '../utils/mysql-client-args';
+import { runner } from '../utils/process-runner';
 import type { Command } from '../types';
 
 interface DumpFile {
@@ -71,11 +72,16 @@ const load: Command = async ({ args }) => {
   );
 
   const { name, connection } = await resolveProjectConnection();
+
+  runner.preflight('mysql');
+
   const startedAt = Date.now();
 
   progress('Loading dump file...');
 
-  await runMySqlCommand(`mysql ${clientArgs(connection)} < ${dump.path}`);
+  await runner.run(['mysql', ...clientArgs(connection)], {
+    stdin: Bun.file(dump.path),
+  });
 
   return {
     kind: 'load',
