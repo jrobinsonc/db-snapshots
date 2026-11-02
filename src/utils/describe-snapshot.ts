@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs';
+import type { Stats } from 'node:fs';
 import type { Snapshot } from '../types';
 import { toIsoSeconds } from './snapshot-header';
 import type { SnapshotHeader } from './snapshot-header';
@@ -10,14 +11,15 @@ import type { SnapshotHeader } from './snapshot-header';
  * @param file - The path to the dump file.
  * @param header - The file's Snapshot Header; without one, the creation time
  *   falls back to the file's mtime and the Connection/Driver are unknown.
+ * @param stats - The file's stats, when the caller already has them.
  * @returns The Snapshot object.
  */
 export default function describeSnapshot(
   name: string,
   file: string,
   header?: SnapshotHeader,
+  stats: Stats = statSync(file),
 ): Snapshot {
-  const stats = statSync(file);
 
   return {
     name,

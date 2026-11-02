@@ -36,15 +36,20 @@ function readStorage(storage: string): string[] {
 export async function listSnapshots(storage: string): Promise<Snapshot[]> {
   const files = readStorage(storage)
     .filter((entry) => entry.endsWith(SNAPSHOT_EXTENSION))
-    .map((entry) => ({
-      name: entry.slice(0, -SNAPSHOT_EXTENSION.length),
-      path: join(storage, entry),
-    }))
-    .filter(({ path }) => statSync(path).isFile());
+    .map((entry) => {
+      const path = join(storage, entry);
+
+      return {
+        name: entry.slice(0, -SNAPSHOT_EXTENSION.length),
+        path,
+        stats: statSync(path),
+      };
+    })
+    .filter(({ stats }) => stats.isFile());
 
   const snapshots = await Promise.all(
-    files.map(async ({ name, path }) =>
-      describeSnapshot(name, path, await readSnapshotHeader(path)),
+    files.map(async ({ name, path, stats }) =>
+      describeSnapshot(name, path, await readSnapshotHeader(path), stats),
     ),
   );
 
