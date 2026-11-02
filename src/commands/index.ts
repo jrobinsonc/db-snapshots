@@ -2,6 +2,7 @@ import type { Command } from '../types';
 import type { CliOptionDefinitions } from '../utils/parse-cli-arguments';
 import create, { options as createOptions } from './create';
 import init, { options as initOptions } from './init';
+import list, { options as listOptions } from './list';
 import load, { options as loadOptions } from './load';
 
 /** A command together with the option declarations used to parse its flags. */
@@ -32,6 +33,12 @@ const commands: Readonly<Record<string, RegisteredCommand>> = {
     options: loadOptions,
     description: 'Load a snapshot into the database.',
     usage: '[name]',
+  },
+  list: {
+    run: list,
+    options: listOptions,
+    description: 'List the snapshots in the Snapshot Storage.',
+    usage: '',
   },
 };
 

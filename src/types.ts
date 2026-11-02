@@ -47,8 +47,15 @@ export interface InitResult {
   password_env_var: string | null;
 }
 
+/** The outcome of `list`. */
+export interface ListResult {
+  kind: 'list';
+  /** Newest first by creation time. */
+  snapshots: Snapshot[];
+}
+
 /** What a command returns for the output layer to render. */
-export type CommandResult = CreateResult | LoadResult | InitResult;
+export type CommandResult = CreateResult | LoadResult | InitResult | ListResult;
 
 /** A command module's default export. Resolves to undefined when there is nothing to report. */
 export type Command = (
