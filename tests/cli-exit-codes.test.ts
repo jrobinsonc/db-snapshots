@@ -45,7 +45,7 @@ describe('cli exit codes', () => {
     const { exitCode, output } = runCli('load', 'no-such-snapshot-xyz');
 
     expect(exitCode).toBe(1);
-    expect(output).toContain("doesn't exist");
+    expect(output).toContain('Config file not found');
   });
 
   test('an unexpected error prints its stack and exits non-zero', () => {

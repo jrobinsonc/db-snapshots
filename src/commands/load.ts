@@ -1,12 +1,13 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DUMP_DIR } from '../constants';
 import { UserError } from '../utils/exceptions';
-import getDumpFiles from '../utils/get-dump-files';
 import describeSnapshot from '../utils/describe-snapshot';
+import { findConfigFile } from '../utils/find-config-file';
+import { loadConfig } from '../utils/load-config';
 import { progress } from '../utils/output';
 import { ask } from '../utils/prompt';
-import { resolveProjectConnection } from '../utils/resolve-connection';
+import { resolveConnection } from '../utils/resolve-connection';
+import { listSnapshots } from '../utils/snapshot-repository';
 import { getDriver } from '../drivers';
 import { runner } from '../utils/process-runner';
 import type { Command } from '../types';
@@ -22,9 +23,13 @@ interface DumpFile {
  * Retrieves a dump file
  *
  * @param dumpName - The name of the dump file to retrieve
+ * @param storage - The Snapshot Storage directory.
  * @returns A promise that resolves with the dump file
  */
-async function getDump(dumpName: string | undefined): Promise<DumpFile> {
+async function getDump(
+  dumpName: string | undefined,
+  storage: string,
+): Promise<DumpFile> {
   const dump: DumpFile = { name: '', path: '' };
 
   if (dumpName) {
@@ -33,7 +38,8 @@ async function getDump(dumpName: string | undefined): Promise<DumpFile> {
       .replaceAll(/[^\da-z-]+/gi, '-')
       .replaceAll(/-+/g, '-');
   } else {
-    const fileList = await getDumpFiles();
+    // Newest first, so the picker opens on the latest Snapshot.
+    const fileList = (await listSnapshots(storage)).map(({ name }) => name);
 
     if (fileList.length === 0) {
       throw new UserError('No dump files found', 'snapshot_not_found');
@@ -53,7 +59,7 @@ async function getDump(dumpName: string | undefined): Promise<DumpFile> {
     dump.name = answers.dumpName;
   }
 
-  dump.path = join(DUMP_DIR, `${dump.name}.sql`);
+  dump.path = join(storage, `${dump.name}.sql`);
 
   if (!existsSync(dump.path)) {
     throw new UserError(
@@ -66,12 +72,14 @@ async function getDump(dumpName: string | undefined): Promise<DumpFile> {
 }
 
 const load: Command = async ({ args }) => {
+  const config = loadConfig(findConfigFile());
   const dumpName = args.get(0);
   const dump = await getDump(
     dumpName === undefined ? undefined : String(dumpName),
+    config.storage,
   );
 
-  const { name, connection } = await resolveProjectConnection();
+  const { name, connection } = await resolveConnection(config);
   const driver = getDriver(connection.driver);
 
   runner.preflight(driver.binaries.load);

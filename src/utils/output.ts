@@ -1,4 +1,5 @@
 import type { CommandResult, Snapshot } from '../types';
+import { localTimeParts } from './local-time';
 
 type Color = 'red' | 'green' | 'yellow';
 
@@ -7,7 +8,6 @@ const UNKNOWN = '—';
 
 const BYTES_PER_UNIT = 1024;
 const SIZE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const;
-const TIMESTAMP_PART_WIDTH = 2;
 
 /** A stream that may be attached to a terminal. */
 interface TtyLike {
@@ -92,11 +92,9 @@ export function formatSize(bytes: number): string {
  * @returns For example `2026-10-31 21:30:00`.
  */
 function formatLocalTime(iso: string): string {
-  const date = new Date(iso);
-  const pad = (value: number): string =>
-    String(value).padStart(TIMESTAMP_PART_WIDTH, '0');
+  const { date, time } = localTimeParts(new Date(iso));
 
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${date} ${time.join(':')}`;
 }
 
 /**

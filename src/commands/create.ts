@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { getDriver } from '../drivers';
 import { UserError, raise } from '../utils/exceptions';
 import describeSnapshot from '../utils/describe-snapshot';
+import { localTimeParts } from '../utils/local-time';
 import { progress } from '../utils/output';
 import { confirm } from '../utils/prompt';
 import { resolveProjectConnection } from '../utils/resolve-connection';
@@ -10,8 +11,6 @@ import { runner } from '../utils/process-runner';
 import { writeSnapshotFile } from '../utils/snapshot-header';
 import type { SnapshotHeader } from '../utils/snapshot-header';
 import type { Command } from '../types';
-
-const TIMESTAMP_PART_WIDTH = 2;
 
 /**
  * Formats a dump file name
@@ -35,20 +34,9 @@ function formatFilename(name: string): string {
  * @returns For example `local_2026-10-31_21-30-00`.
  */
 function automaticSnapshotName(connection: string, created: Date): string {
-  const pad = (value: number): string =>
-    String(value).padStart(TIMESTAMP_PART_WIDTH, '0');
-  const date = [
-    created.getFullYear(),
-    pad(created.getMonth() + 1),
-    pad(created.getDate()),
-  ].join('-');
-  const time = [
-    pad(created.getHours()),
-    pad(created.getMinutes()),
-    pad(created.getSeconds()),
-  ].join('-');
+  const { date, time } = localTimeParts(created);
 
-  return `${connection}_${date}_${time}`;
+  return `${connection}_${date}_${time.join('-')}`;
 }
 
 interface DumpFile {
