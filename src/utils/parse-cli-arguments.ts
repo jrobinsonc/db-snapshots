@@ -52,6 +52,9 @@ export default function parseCliArguments(
     parser.options(optionDefinitions);
   }
 
+  // Positionals such as Snapshot Names are used exactly as typed: `007`
+  // must not become the number 7.
+  parser.parserConfiguration({ 'parse-positional-numbers': false });
   parser.strictOptions(true);
   parser.exitProcess(false);
 

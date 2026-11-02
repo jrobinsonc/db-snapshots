@@ -4,6 +4,12 @@
  */
 
 declare module 'inquirer' {
+  /** A `search` result: shown by `name`, answered with `value`. */
+  export interface SearchChoice {
+    name: string;
+    value: unknown;
+  }
+
   /** A single prompt shown to the user. */
   export interface Question {
     type: string;
@@ -12,7 +18,12 @@ declare module 'inquirer' {
     default?: unknown;
     validate?: (input: string) => true | string;
     choices?: string[];
-    source?: (answers: unknown, input?: string) => string[] | Promise<string[]>;
+    source?: (
+      answers: unknown,
+      input?: string,
+    ) =>
+      | Array<string | SearchChoice>
+      | Promise<Array<string | SearchChoice>>;
   }
 
   const inquirer: {

@@ -7,6 +7,24 @@ import { readSnapshotHeader } from './snapshot-header';
 const SNAPSHOT_EXTENSION = '.sql';
 
 /**
+ * @param name - A Snapshot Name.
+ * @returns The file name of that Snapshot in the Snapshot Storage.
+ */
+function snapshotFileName(name: string): string {
+  return `${name}${SNAPSHOT_EXTENSION}`;
+}
+
+/**
+ * @param entry - A Snapshot Storage entry name.
+ * @returns Its Snapshot Name, or undefined when it is not a Snapshot file name.
+ */
+function snapshotNameOf(entry: string): string | undefined {
+  return entry.endsWith(SNAPSHOT_EXTENSION)
+    ? entry.slice(0, -SNAPSHOT_EXTENSION.length)
+    : undefined;
+}
+
+/**
  * Lists the file names at the top level of the Snapshot Storage. A missing
  * Snapshot Storage holds no Snapshots.
  *
@@ -26,6 +44,57 @@ function readStorage(storage: string): string[] {
 }
 
 /**
+ * Describes one Snapshot Storage entry, if it is a Snapshot.
+ *
+ * @param storage - The Snapshot Storage directory.
+ * @param entry - A top-level entry name.
+ * @returns The Snapshot, or undefined when the entry is not a Snapshot file.
+ */
+async function readSnapshot(
+  storage: string,
+  entry: string,
+): Promise<Snapshot | undefined> {
+  const name = snapshotNameOf(entry);
+
+  if (name === undefined) {
+    return;
+  }
+
+  const path = join(storage, entry);
+  const stats = statSync(path);
+
+  if (!stats.isFile()) {
+    return;
+  }
+
+  return describeSnapshot(
+    name,
+    path,
+    await readSnapshotHeader(path),
+    stats,
+  );
+}
+
+/**
+ * Finds the Snapshot with exactly this Snapshot Name. Only top-level files
+ * count, so a name can never reach outside the Snapshot Storage.
+ *
+ * @param storage - The Snapshot Storage directory.
+ * @param name - The Snapshot Name, as typed.
+ * @returns The Snapshot, or undefined when there is none with that name.
+ */
+export async function findSnapshot(
+  storage: string,
+  name: string,
+): Promise<Snapshot | undefined> {
+  const entry = snapshotFileName(name);
+
+  return readStorage(storage).includes(entry)
+    ? readSnapshot(storage, entry)
+    : undefined;
+}
+
+/**
  * Finds every Snapshot in the Snapshot Storage. Only top-level `.sql` files
  * count; subdirectories are ignored.
  *
@@ -34,24 +103,11 @@ function readStorage(storage: string): string[] {
  *   else file mtime).
  */
 export async function listSnapshots(storage: string): Promise<Snapshot[]> {
-  const files = readStorage(storage)
-    .filter((entry) => entry.endsWith(SNAPSHOT_EXTENSION))
-    .map((entry) => {
-      const path = join(storage, entry);
-
-      return {
-        name: entry.slice(0, -SNAPSHOT_EXTENSION.length),
-        path,
-        stats: statSync(path),
-      };
-    })
-    .filter(({ stats }) => stats.isFile());
-
-  const snapshots = await Promise.all(
-    files.map(async ({ name, path, stats }) =>
-      describeSnapshot(name, path, await readSnapshotHeader(path), stats),
-    ),
-  );
+  const snapshots = (
+    await Promise.all(
+      readStorage(storage).map((entry) => readSnapshot(storage, entry)),
+    )
+  ).filter((snapshot) => snapshot !== undefined);
 
   return snapshots.sort(
     (a, b) =>
