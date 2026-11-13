@@ -1,5 +1,6 @@
 import type { Command } from '../types';
 import type { CliOptionDefinitions } from '../utils/parse-cli-arguments';
+import cleanup, { options as cleanupOptions } from './cleanup';
 import create, { options as createOptions } from './create';
 import init, { options as initOptions } from './init';
 import list, { options as listOptions } from './list';
@@ -38,6 +39,13 @@ const commands: Readonly<Record<string, RegisteredCommand>> = {
     run: list,
     options: listOptions,
     description: 'List the snapshots in the Snapshot Storage.',
+    usage: '',
+  },
+  cleanup: {
+    run: cleanup,
+    options: cleanupOptions,
+    description:
+      'Delete older Automatic Snapshots, keeping the newest 2 per Connection.',
     usage: '',
   },
 };
