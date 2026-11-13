@@ -1,5 +1,6 @@
 # Database Snapshots
 
+[![CI](https://github.com/jrobinsonc/db-snapshots/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jrobinsonc/db-snapshots/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/jrobinsonc/db-snapshots)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/jrobinsonc/db-snapshots/main)](https://github.com/jrobinsonc/db-snapshots/commits/main)
 [![Bun](https://img.shields.io/badge/bun-%E2%89%A51.4.4-black?logo=bun)](https://bun.com/docs/installation)
