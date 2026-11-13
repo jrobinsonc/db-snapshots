@@ -95,7 +95,8 @@ describe('renderResult', () => {
     );
 
     expect(text).toStartWith('Config written: /app/.db-snapshots.json\n');
-    expect(text).toContain('DB_PASSWORD=');
+    expect(text).toContain('The password was not written to the config.');
+    expect(text).toContain('password environment variable');
     expect(text).toContain('.env');
   });
 
