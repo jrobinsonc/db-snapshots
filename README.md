@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/github/license/jrobinsonc/db-snapshots)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/jrobinsonc/db-snapshots/main)](https://github.com/jrobinsonc/db-snapshots/commits/main)
 [![Bun](https://img.shields.io/badge/bun-%E2%89%A51.4.4-black?logo=bun)](https://bun.com/docs/installation)
+[![CodeQL](https://github.com/jrobinsonc/db-snapshots/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/jrobinsonc/db-snapshots/actions/workflows/github-code-scanning/codeql)
 
 Quickly create and load a database snapshots.
 
