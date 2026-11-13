@@ -4,7 +4,9 @@ import { UserError } from './utils/exceptions';
 import { renderCommandHelp, renderGeneralHelp } from './utils/help';
 import {
   disableColor,
-  printDiagnostic, printError, printResult,
+  printDiagnostic,
+  printError,
+  printResult,
 } from './utils/output';
 import parseCliArguments from './utils/parse-cli-arguments';
 

@@ -67,12 +67,7 @@ async function readSnapshot(
     return;
   }
 
-  return describeSnapshot(
-    name,
-    path,
-    await readSnapshotHeader(path),
-    stats,
-  );
+  return describeSnapshot(name, path, await readSnapshotHeader(path), stats);
 }
 
 /**

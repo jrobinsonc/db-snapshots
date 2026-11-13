@@ -1,10 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { UserError } from "./exceptions";
+import { UserError } from './exceptions';
 
 /** The name of the project config file. */
-export const CONFIG_FILE_NAME = ".db-snapshots.json";
+export const CONFIG_FILE_NAME = '.db-snapshots.json';
 
 function isFile(filePath: string): boolean {
   try {
@@ -35,8 +35,8 @@ export function findConfigFile(startDir: string = process.cwd()): string {
 
     if (parent === current) {
       throw new UserError(
-        "Config file not found. Run `dbs init` to create one.",
-        "config_not_found",
+        'Config file not found. Run `dbs init` to create one.',
+        'config_not_found',
       );
     }
 

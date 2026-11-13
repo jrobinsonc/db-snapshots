@@ -21,9 +21,7 @@ declare module 'inquirer' {
     source?: (
       answers: unknown,
       input?: string,
-    ) =>
-      | Array<string | SearchChoice>
-      | Promise<Array<string | SearchChoice>>;
+    ) => Array<string | SearchChoice> | Promise<Array<string | SearchChoice>>;
   }
 
   const inquirer: {

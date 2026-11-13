@@ -20,7 +20,6 @@ export default function describeSnapshot(
   header?: SnapshotHeader,
   stats: Stats = statSync(file),
 ): Snapshot {
-
   return {
     name,
     file,
