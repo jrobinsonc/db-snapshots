@@ -178,7 +178,7 @@ export function renderResult(result: CommandResult, color: boolean): string {
       }
 
       const advice = colorize(
-        `The password was not written to the config. Add ${result.password_env_var}=<your password> to .env and keep .env out of version control.`,
+        'The password was not written to the config. Add your password environment variable to .env and keep .env out of version control.',
         'yellow',
         color,
       );
