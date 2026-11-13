@@ -6,6 +6,8 @@
 [![Bun](https://img.shields.io/badge/bun-%E2%89%A51.4.4-black?logo=bun)](https://bun.com/docs/installation)
 [![CodeQL](https://github.com/jrobinsonc/db-snapshots/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/jrobinsonc/db-snapshots/actions/workflows/github-code-scanning/codeql)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jrobinsonc/db-snapshots/badge)](https://scorecard.dev/viewer/?uri=github.com/jrobinsonc/db-snapshots)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=jrobinsonc_db-snapshots&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=jrobinsonc_db-snapshots)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jrobinsonc_db-snapshots&metric=coverage)](https://sonarcloud.io/summary/new_code?id=jrobinsonc_db-snapshots)
 
 Quickly create and load a database snapshots.
 

@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       # Test on the minimum Bun version the package supports, taken from
       # the `engines.bun` range in package.json (e.g. ">=1.4.4" -> "1.4.4").
@@ -52,4 +53,9 @@ jobs:
         run: bun fmt --check
 
       - name: Tests
-        run: bun test
+        run: bun test --coverage --coverage-reporter=text --coverage-reporter=lcov
+
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
