@@ -1,16 +1,34 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { getDriver } from '../drivers';
+import { getDriver as defaultGetDriver } from '../drivers';
 import { UserError, raise } from '../utils/exceptions';
 import describeSnapshot from '../utils/describe-snapshot';
+import { findConfigFile } from '../utils/find-config-file';
+import { loadConfig } from '../utils/load-config';
 import { localTimeParts } from '../utils/local-time';
 import { progress } from '../utils/output';
-import { confirm } from '../utils/prompt';
-import { resolveProjectConnection } from '../utils/resolve-connection';
-import { runner } from '../utils/process-runner';
+import { confirm as promptConfirm, ask as promptAsk } from '../utils/prompt';
+import { createConnectionResolver } from '../utils/resolve-connection';
+import { runner as defaultRunner } from '../utils/process-runner';
+import type { ProcessRunner } from '../utils/process-runner';
 import { writeSnapshotFile } from '../utils/snapshot-header';
 import type { SnapshotHeader } from '../utils/snapshot-header';
 import type { Command } from '../types';
+
+interface CreateDeps {
+  /** The prompt helper's `ask`. */
+  ask: typeof promptAsk;
+  /** The prompt helper's `confirm`. */
+  confirm: typeof promptConfirm;
+  /** The directory used to locate the project config. */
+  cwd: () => string;
+  /** Looks up the Driver for a Connection. */
+  getDriver: typeof defaultGetDriver;
+  /** The process runner used for binary preflight. */
+  runner: ProcessRunner;
+  /** The clock, for the creation time and Automatic Snapshot names. */
+  now: () => Date;
+}
 
 /**
  * Formats a dump file name
@@ -53,11 +71,13 @@ interface DumpFile {
  *
  * @param name - The Snapshot Name.
  * @param storage - The Snapshot Storage directory.
+ * @param confirm - The prompt helper's `confirm`.
  * @returns A promise that resolves with the dump file, or undefined if the user declines to overwrite it
  */
 async function getDump(
   name: string,
   storage: string,
+  confirm: typeof promptConfirm,
 ): Promise<DumpFile | undefined> {
   const path = join(storage, `${name}.sql`);
   const exists = existsSync(path);
@@ -76,51 +96,67 @@ async function getDump(
   return { name, path, exists };
 }
 
-const create: Command = async ({ args }) => {
-  // Resolved first so a config problem fails before any Snapshot prompt.
-  const {
-    name: connectionName,
-    connection,
-    config,
-  } = await resolveProjectConnection();
-  const driver = getDriver(connection.driver);
+/**
+ * Builds the `create` command.
+ *
+ * @param deps - Overridable collaborators, for tests.
+ * @returns The command.
+ */
+export function createCreate(deps: CreateDeps): Command {
+  const resolveConnection = createConnectionResolver({ ask: deps.ask });
 
-  runner.preflight(driver.binaries.dump);
+  return async ({ args }) => {
+    // Resolved first so a config problem fails before any Snapshot prompt.
+    const config = loadConfig(findConfigFile(deps.cwd()));
+    const { name: connectionName, connection } =
+      await resolveConnection(config);
+    const driver = deps.getDriver(connection.driver);
 
-  const created = new Date();
-  const nameArgument = args.get(0);
-  const dump = await getDump(
-    nameArgument === undefined
-      ? automaticSnapshotName(connectionName, created)
-      : formatFilename(String(nameArgument)),
-    config.storage,
-  );
+    deps.runner.preflight(driver.binaries.dump);
 
-  if (!dump) {
-    return;
-  }
+    const created = deps.now();
+    const nameArgument = args.get(0);
+    const dump = await getDump(
+      nameArgument === undefined
+        ? automaticSnapshotName(connectionName, created)
+        : formatFilename(String(nameArgument)),
+      config.storage,
+      deps.confirm,
+    );
 
-  const header: SnapshotHeader = {
-    driver: driver.name,
-    connection: connectionName,
-    created,
+    if (!dump) {
+      return;
+    }
+
+    const header: SnapshotHeader = {
+      driver: driver.name,
+      connection: connectionName,
+      created,
+    };
+
+    mkdirSync(config.storage, { recursive: true });
+
+    progress('Creating dump file...');
+
+    await driver.dump(connection, {
+      stdout: (output) => writeSnapshotFile(dump.path, header, output),
+    });
+
+    return {
+      kind: 'create',
+      snapshot: describeSnapshot(dump.name, dump.path, header),
+      overwritten: dump.exists,
+    };
   };
+}
 
-  mkdirSync(config.storage, { recursive: true });
-
-  progress('Creating dump file...');
-
-  await driver.dump(connection, {
-    stdout: (output) => writeSnapshotFile(dump.path, header, output),
-  });
-
-  return {
-    kind: 'create',
-    snapshot: describeSnapshot(dump.name, dump.path, header),
-    overwritten: dump.exists,
-  };
-};
-
-export default create;
+export default createCreate({
+  ask: promptAsk,
+  confirm: promptConfirm,
+  cwd: () => process.cwd(),
+  getDriver: defaultGetDriver,
+  runner: defaultRunner,
+  now: () => new Date(),
+});
 
 export const options = {};
