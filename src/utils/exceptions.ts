@@ -20,14 +20,16 @@ export type UserErrorCode = (typeof USER_ERROR_CODES)[number];
 /** An expected failure caused by the user's input or environment. */
 export class UserError extends Error {
   readonly code: UserErrorCode;
+  readonly candidates?: string[];
 
-  constructor(message: string, code: UserErrorCode) {
+  constructor(message: string, code: UserErrorCode, candidates?: string[]) {
     super(message);
 
     Error.captureStackTrace(this, this.constructor);
 
     this.name = 'UserError';
     this.code = code;
+    this.candidates = candidates;
   }
 }
 
