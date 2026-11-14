@@ -35,6 +35,7 @@
     "url": "https://github.com/jrobinsonc/db-snapshots/issues"
   },
   "scripts": {
+    "build": "bun build --compile index.ts --outfile dist/dbs",
     "test": "bun test"
   },
   "bin": {
