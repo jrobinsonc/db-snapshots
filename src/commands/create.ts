@@ -100,9 +100,20 @@ async function getDump(
 
   // If the file already exists, ask if the user wants to overwrite it.
   if (exists) {
-    const confirmed = await confirm(
-      "You're sure you want to overwrite this file?",
-    );
+    let confirmed: boolean;
+
+    try {
+      confirmed = await confirm("You're sure you want to overwrite this file?");
+    } catch (error) {
+      if (error instanceof UserError && error.code === 'input_required') {
+        throw new UserError(
+          `Snapshot "${name}" already exists in ${storage}.`,
+          'snapshot_exists',
+        );
+      }
+
+      throw error;
+    }
 
     if (!confirmed) {
       return;
