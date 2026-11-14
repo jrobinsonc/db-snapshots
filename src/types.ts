@@ -54,8 +54,17 @@ export interface ListResult {
   snapshots: Snapshot[];
 }
 
+/** The outcome of `cleanup`. */
+export interface CleanupResult {
+  kind: 'cleanup';
+  deleted: Snapshot[];
+  kept: Snapshot[];
+  dry_run: boolean;
+}
+
 /** What a command returns for the output layer to render. */
-export type CommandResult = CreateResult | LoadResult | InitResult | ListResult;
+export type CommandResult =
+  CreateResult | LoadResult | InitResult | ListResult | CleanupResult;
 
 /** A command module's default export. Resolves to undefined when there is nothing to report. */
 export type Command = (
