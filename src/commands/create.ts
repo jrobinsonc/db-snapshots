@@ -31,17 +31,28 @@ interface CreateDeps {
 }
 
 /**
- * Formats a dump file name
+ * Validates and sanitizes a Named Snapshot's name, preserving `[A-Za-z0-9._-]`
+ * and replacing any other character with `-`.
  *
- * @param name - The name of the dump file
- * @returns The formatted name
- * @throws If the name is not given
+ * @param name - The Snapshot Name given by the user.
+ * @returns The sanitized Snapshot Name.
+ * @throws {UserError} When the name is empty or starts with a dot.
  */
-function formatFilename(name: string): string {
-  return (name || raise(new UserError('No dump file name provided', 'usage')))
-    .trim()
-    .replaceAll(/[^\da-z-]+/gi, '-')
-    .replaceAll(/-+/g, '-');
+function sanitizeSnapshotName(name: string): string {
+  if (name.length === 0) {
+    raise(new UserError('Snapshot Name cannot be empty.', 'usage'));
+  }
+
+  if (name.startsWith('.')) {
+    raise(
+      new UserError(
+        `Snapshot Name "${name}" cannot start with a dot.`,
+        'usage',
+      ),
+    );
+  }
+
+  return name.replaceAll(/[^A-Za-z0-9._-]/g, '-');
 }
 
 /**
@@ -119,7 +130,7 @@ export function createCreate(deps: CreateDeps): Command {
     const dump = await getDump(
       nameArgument === undefined
         ? automaticSnapshotName(connectionName, created)
-        : formatFilename(String(nameArgument)),
+        : sanitizeSnapshotName(String(nameArgument)),
       config.storage,
       deps.confirm,
     );
