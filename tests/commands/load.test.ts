@@ -16,6 +16,19 @@ import { formatSnapshotHeader } from '../../src/utils/snapshot-header';
 
 const ENTRYPOINT = path.join(import.meta.dir, '..', '..', 'index.ts');
 
+interface HarnessOptions {
+  tablesOutput?: string;
+  onPreflight?: (binary: string) => void;
+  onRun?: (command: string[], options: RunOptions) => Promise<void> | void;
+  ask?: (questions: Question[]) => Promise<Record<string, unknown>>;
+}
+
+interface RecordedRun {
+  command: string[];
+  stdinText: string;
+  stdinWasStream: boolean;
+}
+
 describe('commands/load', () => {
   let root: string;
   let storage: string;
@@ -56,11 +69,9 @@ describe('commands/load', () => {
     return file;
   }
 
-  function createHarness(
-    askImpl?: (questions: Question[]) => Promise<Record<string, unknown>>,
-  ) {
+  function createHarness(harnessOptions: HarnessOptions = {}) {
     const preflights: string[] = [];
-    const runs: Array<{ command: string[]; stdinText: string }> = [];
+    const runs: RecordedRun[] = [];
     const dropAllCalls: number[] = [];
     const loadCalls: number[] = [];
     const asked: Question[][] = [];
@@ -68,14 +79,27 @@ describe('commands/load', () => {
     const runner: ProcessRunner = {
       preflight(binary) {
         preflights.push(binary);
+        harnessOptions.onPreflight?.(binary);
       },
       async run(command, options: RunOptions = {}) {
+        if (harnessOptions.onRun) {
+          await harnessOptions.onRun(command, options);
+        }
+
+        const stdinWasStream = options.stdin instanceof ReadableStream;
         const stdinText =
           options.stdin === undefined
             ? ''
             : await new Response(options.stdin).text();
 
-        runs.push({ command, stdinText });
+        runs.push({ command, stdinText, stdinWasStream });
+
+        if (options.stdout) {
+          await options.stdout(
+            new Blob([harnessOptions.tablesOutput ?? '']).stream(),
+          );
+        }
+
         return { stderr: '' };
       },
     };
@@ -99,8 +123,8 @@ describe('commands/load', () => {
       runner,
       ask: async <Answers>(questions: Question[]) => {
         asked.push(questions);
-        if (askImpl) {
-          return (await askImpl(questions)) as Answers;
+        if (harnessOptions.ask) {
+          return (await harnessOptions.ask(questions)) as Answers;
         }
         throw new Error('Unexpected prompt in test');
       },
@@ -161,12 +185,14 @@ describe('commands/load', () => {
     });
 
     const { load, preflights, runs, dropAllCalls, loadCalls, asked } =
-      createHarness(async (questions) => {
-        const source = questions[0]?.source;
-        const choices = (await source?.({}, '')) as SearchChoice[];
-        const picked = choices[0]?.value as Snapshot;
+      createHarness({
+        ask: async (questions) => {
+          const source = questions[0]?.source;
+          const choices = (await source?.({}, '')) as SearchChoice[];
+          const picked = choices[0]?.value as Snapshot;
 
-        return { picked };
+          return { picked };
+        },
       });
 
     const error = await expectDriverMismatch(() => load({ args: new Map() }));
@@ -233,21 +259,23 @@ describe('commands/load', () => {
       connection: 'mariadb_local',
       created: '2026-10-31T12:00:00Z',
     });
-    const { load, preflights, runs, loadCalls } = createHarness();
+    const { load, preflights, runs, dropAllCalls, loadCalls } = createHarness();
 
     const result = (await load({
       args: new Map<string | number, unknown>([[0, 'mariadb_dump']]),
     })) as LoadResult;
 
     expect(preflights).toEqual(['mysql']);
+    expect(dropAllCalls).toHaveLength(1);
     expect(loadCalls).toHaveLength(1);
-    expect(runs).toHaveLength(1);
-    expect(runs[0]?.command).toEqual(['mysql', 'app']);
-    expect(runs[0]?.stdinText).toContain(sql);
+    expect(runs).toHaveLength(2);
+    expect(runs[1]?.command).toEqual(['mysql', 'app']);
+    expect(runs[1]?.stdinWasStream).toBe(false);
+    expect(runs[1]?.stdinText).toContain(sql);
     expect(result).toMatchObject({
       kind: 'load',
       connection: 'local',
-      dropped: false,
+      dropped: true,
     });
     expect(result.snapshot.name).toBe('mariadb_dump');
     expect(result.snapshot.driver).toBe('mysql');
@@ -257,18 +285,201 @@ describe('commands/load', () => {
   test('skips the Driver check for headerless Snapshot files', async () => {
     const sql = 'CREATE TABLE legacy (id INT);\n';
     writeSnapshot('foreign_headerless', sql);
-    const { load, preflights, runs, loadCalls } = createHarness();
+    const { load, preflights, runs, dropAllCalls, loadCalls } = createHarness();
 
     const result = (await load({
       args: new Map<string | number, unknown>([[0, 'foreign_headerless']]),
     })) as LoadResult;
 
     expect(preflights).toEqual(['mysql']);
+    expect(dropAllCalls).toHaveLength(1);
     expect(loadCalls).toHaveLength(1);
-    expect(runs).toHaveLength(1);
-    expect(runs[0]?.command).toEqual(['mysql', 'app']);
-    expect(runs[0]?.stdinText).toBe(sql);
+    expect(runs).toHaveLength(2);
+    expect(runs[1]?.command).toEqual(['mysql', 'app']);
+    expect(runs[1]?.stdinWasStream).toBe(false);
+    expect(runs[1]?.stdinText).toBe(sql);
     expect(result.snapshot.driver).toBeNull();
     expect(result.connection).toBe('local');
+    expect(result.dropped).toBe(true);
+  });
+
+  test('drops all tables and views before streaming the Snapshot into mysql', async () => {
+    writeSnapshot('baseline', 'CREATE TABLE users (id INT);\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T21:30:00Z',
+    });
+    const { load, preflights, runs, dropAllCalls, loadCalls } = createHarness({
+      tablesOutput: 'active_users\tVIEW\nusers\tBASE TABLE\n',
+    });
+
+    const result = (await load({
+      args: new Map([[0, 'baseline']]),
+    })) as LoadResult;
+
+    expect(preflights).toEqual(['mysql']);
+    expect(dropAllCalls).toHaveLength(1);
+    expect(loadCalls).toHaveLength(1);
+    expect(runs).toHaveLength(2);
+
+    const [dropQueryRun, loadRun] = runs;
+
+    expect(
+      dropQueryRun?.command.some((arg) => arg.startsWith('--execute=')),
+    ).toBe(true);
+    expect(loadRun?.command).toEqual(['mysql', 'app']);
+    expect(loadRun?.stdinWasStream).toBe(true);
+    expect(loadRun?.stdinText).toBe(
+      [
+        'SET FOREIGN_KEY_CHECKS=0;',
+        'DROP VIEW IF EXISTS `active_users`;',
+        'DROP TABLE IF EXISTS `users`;',
+        'SET FOREIGN_KEY_CHECKS=1;',
+        '-- db-snapshots: driver=mysql connection=local created=2026-10-31T21:30:00Z',
+        'CREATE TABLE users (id INT);',
+        '',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject({
+      kind: 'load',
+      connection: 'local',
+      dropped: true,
+      snapshot: { name: 'baseline' },
+    });
+    expect(result.duration_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  test('prompts for a Snapshot sorted newest first when no name argument is given', async () => {
+    writeSnapshot('older', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-30T10:00:00Z',
+    });
+    writeSnapshot('newer', 'SELECT 2;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T10:00:00Z',
+    });
+
+    let offeredNames: string[] = [];
+    let filteredNames: string[] = [];
+    const { load, runs } = createHarness({
+      tablesOutput: '',
+      ask: async ([question]) => {
+        const all = (await question?.source?.({}, undefined)) as SearchChoice[];
+        const filtered = (await question?.source?.(
+          {},
+          'old',
+        )) as SearchChoice[];
+
+        offeredNames = all.map((choice) => choice.name);
+        filteredNames = filtered.map((choice) => choice.name);
+
+        return { picked: all[0]?.value as Snapshot };
+      },
+    });
+
+    const result = (await load({ args: new Map() })) as LoadResult;
+
+    expect(offeredNames).toEqual(['newer', 'older']);
+    expect(filteredNames).toEqual(['older']);
+    expect(result.snapshot.name).toBe('newer');
+    expect(runs[1]?.stdinText).toContain('SELECT 2;');
+  });
+
+  test('fails with snapshot_not_found when the Snapshot or storage has no match', async () => {
+    const { load, preflights } = createHarness();
+
+    const missingNamed = await load({
+      args: new Map([[0, 'missing']]),
+    }).catch((caught: unknown) => caught);
+
+    expect(missingNamed).toBeInstanceOf(UserError);
+    expect((missingNamed as UserError).code).toBe('snapshot_not_found');
+
+    const missingAny = await load({ args: new Map() }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(missingAny).toBeInstanceOf(UserError);
+    expect((missingAny as UserError).code).toBe('snapshot_not_found');
+    expect(preflights).toEqual([]);
+  });
+
+  test('fails on missing binary preflight before running any client command', async () => {
+    writeSnapshot('baseline', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T21:30:00Z',
+    });
+    const { load, runs } = createHarness({
+      onPreflight: (binary) => {
+        throw new UserError(`Missing ${binary}`, 'missing_binary');
+      },
+    });
+
+    const error = await load({ args: new Map([[0, 'baseline']]) }).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(UserError);
+    expect((error as UserError).code).toBe('missing_binary');
+    expect(runs).toEqual([]);
+  });
+
+  test('wraps client_failed during drop or load (cancelling stream) and rethrows other errors', async () => {
+    writeSnapshot('baseline', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T21:30:00Z',
+    });
+
+    const dropFailure = createHarness({
+      onRun: () => {
+        throw new UserError('mysql failed: unknown database', 'client_failed');
+      },
+    });
+    const dropError = await dropFailure
+      .load({ args: new Map([[0, 'baseline']]) })
+      .catch((caught: unknown) => caught);
+
+    expect(dropError).toBeInstanceOf(UserError);
+    expect((dropError as UserError).code).toBe('client_failed');
+    expect((dropError as UserError).message).toContain('baseline');
+    expect((dropError as UserError).message).toContain('local');
+    expect((dropError as UserError).message).toContain('partially loaded');
+    expect((dropError as UserError).message).toContain('unknown database');
+
+    let canceledStream = false;
+    const loadFailure = createHarness({
+      tablesOutput: 'users\tBASE TABLE\n',
+      onRun: async (_command, runOptions) => {
+        if (runOptions.stdin instanceof ReadableStream) {
+          await runOptions.stdin.cancel('client aborted');
+          canceledStream = true;
+          throw new UserError('mysql failed: syntax error', 'client_failed');
+        }
+      },
+    });
+    const loadError = await loadFailure
+      .load({ args: new Map([[0, 'baseline']]) })
+      .catch((caught: unknown) => caught);
+
+    expect(canceledStream).toBe(true);
+    expect(loadError).toBeInstanceOf(UserError);
+    expect((loadError as UserError).code).toBe('client_failed');
+    expect((loadError as UserError).message).toContain('syntax error');
+
+    const unexpected = new Error('disk failure');
+    const unexpectedFailure = createHarness({
+      onRun: () => {
+        throw unexpected;
+      },
+    });
+    const caughtUnexpected = await unexpectedFailure
+      .load({ args: new Map([[0, 'baseline']]) })
+      .catch((caught: unknown) => caught);
+
+    expect(caughtUnexpected).toBe(unexpected);
   });
 });
