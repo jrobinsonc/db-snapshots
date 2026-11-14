@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { Question } from 'inquirer';
+
 import { createCreate } from '../../src/commands/create';
 import { createMysqlDriver } from '../../src/drivers/mysql';
 import type { Driver, DumpOptions } from '../../src/drivers/types';
@@ -11,6 +13,8 @@ import { CONFIG_FILE_NAME } from '../../src/utils/find-config-file';
 import type { ConnectionConfig } from '../../src/utils/load-config';
 import { createRunner } from '../../src/utils/process-runner';
 import type { ProcessRunner } from '../../src/utils/process-runner';
+import { createPrompter } from '../../src/utils/prompt';
+import type { confirm as promptConfirm } from '../../src/utils/prompt';
 import { parseSnapshotHeader } from '../../src/utils/snapshot-header';
 
 const ENTRYPOINT = path.join(import.meta.dir, '..', '..', 'index.ts');
@@ -32,6 +36,7 @@ const unused = (): never => {
 interface HarnessOptions {
   root: string;
   dumpBody?: string;
+  confirm?: typeof promptConfirm;
   confirmAnswer?: boolean;
   preflightError?: Error;
   driver?: Driver;
@@ -78,10 +83,12 @@ function createHarness(options: HarnessOptions) {
 
   const create = createCreate({
     ask: unused as never,
-    confirm: async (message: string) => {
-      confirmations.push(message);
-      return options.confirmAnswer ?? true;
-    },
+    confirm:
+      options.confirm ??
+      (async (message: string) => {
+        confirmations.push(message);
+        return options.confirmAnswer ?? true;
+      }),
     cwd: () => options.root,
     getDriver: () => driver,
     runner,
@@ -115,9 +122,13 @@ describe('commands/create', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  function writeExisting(name: string, content: string): string {
+  function writeExisting(
+    name: string,
+    content: string,
+    extension: '.sql' | '.sql.gz' = '.sql',
+  ): string {
     fs.mkdirSync(storage, { recursive: true });
-    const file = path.join(storage, `${name}.sql`);
+    const file = path.join(storage, `${name}${extension}`);
     fs.writeFileSync(file, content);
     return file;
   }
@@ -266,6 +277,135 @@ describe('commands/create', () => {
     expect(fs.readFileSync(file, 'utf8')).toContain('NEW DUMP');
     expect(fs.readFileSync(file, 'utf8')).not.toContain('OLD DUMP');
   });
+
+  test.each(['.sql', '.sql.gz'] as const)(
+    'interactive confirmation defaults to No and leaves existing %s Snapshot untouched',
+    async (extension) => {
+      const existingFile = writeExisting('baseline', 'OLD DUMP\n', extension);
+      const asked: Question[][] = [];
+      const prompter = createPrompter({
+        isInteractive: () => true,
+        run: async (questions) => {
+          asked.push(questions);
+          return { confirmed: questions[0]?.default };
+        },
+      });
+      const { create, dumps } = createHarness({
+        root,
+        confirm: prompter.confirm,
+      });
+
+      const result = await invoke(create, 'baseline');
+
+      expect(result).toBeUndefined();
+      expect(asked).toHaveLength(1);
+      expect(asked[0]?.[0]).toMatchObject({
+        type: 'confirm',
+        default: false,
+      });
+      expect(dumps).toHaveLength(0);
+      expect(fs.readFileSync(existingFile, 'utf8')).toBe('OLD DUMP\n');
+      if (extension === '.sql.gz') {
+        expect(fs.existsSync(path.join(storage, 'baseline.sql'))).toBe(false);
+      }
+    },
+  );
+
+  test('detects an existing .sql.gz Snapshot, leaves it untouched when declined, and removes it when confirmed', async () => {
+    const gzFile = writeExisting('baseline', 'OLD GZ DUMP\n', '.sql.gz');
+    const sqlFile = path.join(storage, 'baseline.sql');
+
+    const declined = createHarness({ root, confirmAnswer: false });
+    expect(await invoke(declined.create, 'baseline')).toBeUndefined();
+    expect(declined.confirmations).toHaveLength(1);
+    expect(declined.dumps).toHaveLength(0);
+    expect(fs.readFileSync(gzFile, 'utf8')).toBe('OLD GZ DUMP\n');
+    expect(fs.existsSync(sqlFile)).toBe(false);
+
+    const confirmed = createHarness({
+      root,
+      dumpBody: 'NEW DUMP\n',
+      confirmAnswer: true,
+    });
+    const result = await invoke(confirmed.create, 'baseline');
+
+    expect(confirmed.confirmations).toHaveLength(1);
+    expect(result).toMatchObject({ kind: 'create', overwritten: true });
+    expect(fs.existsSync(gzFile)).toBe(false);
+    expect(fs.readFileSync(sqlFile, 'utf8')).toContain('NEW DUMP');
+  });
+
+  test('removes both .sql and .sql.gz extensions when overwriting if both exist', async () => {
+    const sqlFile = writeExisting('baseline', 'OLD SQL\n', '.sql');
+    const gzFile = writeExisting('baseline', 'OLD GZ\n', '.sql.gz');
+    const { create, confirmations } = createHarness({
+      root,
+      dumpBody: 'NEW DUMP\n',
+      confirmAnswer: true,
+    });
+
+    const result = await invoke(create, 'baseline');
+
+    expect(confirmations).toHaveLength(1);
+    expect(result).toMatchObject({ kind: 'create', overwritten: true });
+    expect(fs.existsSync(gzFile)).toBe(false);
+    expect(fs.readFileSync(sqlFile, 'utf8')).toContain('NEW DUMP');
+    expect(fs.readFileSync(sqlFile, 'utf8')).not.toContain('OLD SQL');
+  });
+
+  test('removes <file>.partial and leaves an existing .sql.gz Snapshot intact when an overwrite fails', async () => {
+    const gzFile = writeExisting('baseline', 'OLD GZ\n', '.sql.gz');
+    const sqlFile = path.join(storage, 'baseline.sql');
+    const partialFile = `${sqlFile}.partial`;
+
+    const { create } = createHarness({
+      root,
+      confirmAnswer: true,
+      onDump: async (_connection, dumpOptions) => {
+        await dumpOptions.stdout(streamOf('HALF WRITTEN\n'));
+        expect(fs.existsSync(partialFile)).toBe(true);
+        throw new UserError(
+          'mysqldump failed: lost connection',
+          'client_failed',
+        );
+      },
+    });
+
+    const error = await invoke(create, 'baseline').catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(UserError);
+    expect((error as UserError).code).toBe('client_failed');
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(sqlFile)).toBe(false);
+    expect(fs.readFileSync(gzFile, 'utf8')).toBe('OLD GZ\n');
+  });
+
+  test.each(['.sql', '.sql.gz'] as const)(
+    'fails with snapshot_exists in noninteractive mode when %s already exists',
+    async (extension) => {
+      const existingFile = writeExisting('baseline', 'OLD DUMP\n', extension);
+      const prompter = createPrompter({
+        isInteractive: () => false,
+        run: unused,
+      });
+      const { create, dumps } = createHarness({
+        root,
+        confirm: prompter.confirm,
+      });
+
+      const error = await invoke(create, 'baseline').catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toBeInstanceOf(UserError);
+      expect((error as UserError).code).toBe('snapshot_exists');
+      expect((error as UserError).message).toContain('baseline');
+      expect(dumps).toHaveLength(0);
+      expect(fs.readFileSync(existingFile, 'utf8')).toBe('OLD DUMP\n');
+    },
+  );
 
   test('fails on a missing dump binary before any prompt or write', async () => {
     const file = writeExisting('baseline', 'OLD DUMP\n');
@@ -541,4 +681,42 @@ describe('commands/create', () => {
     expect(fs.existsSync(partialFile)).toBe(false);
     expect(fs.existsSync(finalFile)).toBe(false);
   });
+
+  test.each(['.sql', '.sql.gz'] as const)(
+    'CLI fails noninteractively when %s already exists and leaves it untouched',
+    (extension) => {
+      const binDir = path.join(root, 'bin');
+      const existingFile = writeExisting('baseline', 'OLD DUMP\n', extension);
+
+      fs.mkdirSync(binDir);
+      fs.writeFileSync(
+        path.join(binDir, 'mysqldump'),
+        [
+          '#!/bin/sh',
+          'if [ "$1" = "--version" ]; then',
+          '  echo "mysqldump  Ver 8.0.36"',
+          '  exit 0',
+          'fi',
+          'exit 0',
+          '',
+        ].join('\n'),
+        { mode: 0o755 },
+      );
+
+      const result = Bun.spawnSync(['bun', ENTRYPOINT, 'create', 'baseline'], {
+        cwd: root,
+        stdin: 'ignore',
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
+        },
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout.toString()).toBe('');
+      expect(result.stderr.toString()).toContain('baseline');
+      expect(result.stderr.toString()).toContain('already exists');
+      expect(fs.readFileSync(existingFile, 'utf8')).toBe('OLD DUMP\n');
+    },
+  );
 });
