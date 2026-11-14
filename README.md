@@ -75,6 +75,62 @@ The config is validated strictly against [`db-snapshots.schema.json`](db-snapsho
 2. The only Connection, if `connections` has exactly one entry.
 3. An interactive Connection picker when `stdin` is a TTY, or an error listing available Connection names when noninteractive.
 
+## Commands
+
+### `dbs init`
+
+Interactively creates `.db-snapshots.json` in the current directory for one MySQL Connection (prompts for Connection name, host, port, user, password and database).
+
+- Writes `$schema` pointing to `db-snapshots.schema.json`.
+- Never writes a literal password: if a literal password is entered, writes `"${DB_PASSWORD}"` and advises storing the secret in `.env`.
+- Refuses if `.db-snapshots.json` already exists, or when `stdin` is not a TTY.
+
+### `dbs create [name]`
+
+Streams a Snapshot of the resolved Connection's database into Snapshot Storage via `mysqldump` (`--single-transaction --quick --no-tablespaces --skip-comments`, plus `--set-gtid-purged=OFF` on MySQL).
+
+- Writes a leading Snapshot Header comment (`-- db-snapshots: driver=mysql connection=<name> created=<ISO-8601 UTC>`, see [ADR-0002](docs/adr/0002-snapshot-header-for-metadata.md)).
+- Without `[name]`, creates an **Automatic Snapshot** named `<connection>_<YYYY-MM-DD_HH-mm-ss>` (local time).
+- With `[name]`, creates a **Named Snapshot** with that Snapshot Name (characters outside `[A-Za-z0-9._-]` are sanitized to `-`; leading dots are rejected).
+- Checks both `.sql` and `.sql.gz` for an existing Snapshot Name: prompts for confirmation (default No) interactively, or fails with `snapshot_exists` when `stdin` is not a TTY.
+- Writes atomically to `<file>.partial` and renames on completion; removes `.partial` on failure or `Ctrl-C` (exit code `130`).
+
+### `dbs load [name]`
+
+Streams a Snapshot into the resolved Connection's database via `mysql`.
+
+- Resolves the target Snapshot in order:
+  1. Exact Snapshot Name match.
+  2. Substring match: a single match is used directly; multiple matches open a filtered interactive picker (or fail with `ambiguous_snapshot` listing candidates when `stdin` is not a TTY).
+  3. When `[name]` is omitted: opens an interactive autocomplete picker sorted newest first (or fails when `stdin` is not a TTY).
+- Verifies the Snapshot Header's Driver matches the Connection's Driver before dropping anything (`driver_mismatch`); MySQL and MariaDB share the `mysql` Driver, and headerless `.sql` files skip this check.
+- Drops all existing tables and views in the target database (with `FOREIGN_KEY_CHECKS=0`, leaving routines and events untouched) before loading so the database matches the Snapshot.
+
+### `dbs list`
+
+Lists all top-level `.sql` Snapshots in Snapshot Storage sorted newest first by creation time (Snapshot Header `created`, falling back to file `mtime` for headerless files).
+
+- Shows `Name`, `Connection`, `Driver`, `Created at`, `Size` (human-readable, base 1024) and `Compressed` (`—` for unknown values on headerless files), or `No snapshots found` when Snapshot Storage is empty.
+
+### `dbs delete [name]`
+
+Removes a Snapshot from Snapshot Storage using the same Snapshot resolution as `dbs load` (exact match, substring match or interactive picker).
+
+- Prompts for confirmation (default No) when resolved via a substring match in interactive mode.
+- Never connects to the database or requires client binaries.
+
+### `dbs cleanup`
+
+Deletes older **Automatic Snapshots** (`<connection>_<YYYY-MM-DD_HH-mm-ss>` whose filename prefix matches the Connection recorded in the Snapshot Header) so that only the newest `2` per Connection remain.
+
+- Leaves **Named Snapshots** and headerless files untouched, and prints each deleted Snapshot Name.
+
+### Global options
+
+- `--help`, `-h`, `dbs help [command]`, `dbs <command> --help` — Show general or command help.
+- `--version` — Print the `dbs` version.
+- `--no-color` (or `NO_COLOR`) — Disable ANSI color output (also disabled automatically when output is not a TTY).
+
 ## Development
 
 ### Requirements
