@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { getDriver as defaultGetDriver } from '../drivers';
 import { UserError, raise } from '../utils/exceptions';
@@ -15,6 +15,9 @@ import { writeSnapshotFile } from '../utils/snapshot-header';
 import type { SnapshotHeader } from '../utils/snapshot-header';
 import type { Command } from '../types';
 
+const EXIT_INTERRUPTED = 130;
+const PARTIAL_SUFFIX = '.partial';
+
 interface CreateDeps {
   /** The prompt helper's `ask`. */
   ask: typeof promptAsk;
@@ -28,6 +31,8 @@ interface CreateDeps {
   runner: ProcessRunner;
   /** The clock, for the creation time and Automatic Snapshot names. */
   now: () => Date;
+  /** Terminates the process when interrupted by SIGINT. */
+  exit?: (code: number) => void;
 }
 
 /**
@@ -115,6 +120,7 @@ async function getDump(
  */
 export function createCreate(deps: CreateDeps): Command {
   const resolveConnection = createConnectionResolver({ ask: deps.ask });
+  const exit = deps.exit ?? ((code: number) => process.exit(code));
 
   return async ({ args }) => {
     // Resolved first so a config problem fails before any Snapshot prompt.
@@ -149,9 +155,41 @@ export function createCreate(deps: CreateDeps): Command {
 
     progress('Creating dump file...');
 
-    await driver.dump(connection, {
-      stdout: (output) => writeSnapshotFile(dump.path, header, output),
-    });
+    const partialPath = `${dump.path}${PARTIAL_SUFFIX}`;
+    const removePartial = () => {
+      rmSync(partialPath, { force: true });
+    };
+    let interrupted = false;
+    const onSigint = () => {
+      interrupted = true;
+      removePartial();
+      exit(EXIT_INTERRUPTED);
+    };
+
+    // Prepend so the partial file is removed before any process-wide SIGINT exit.
+    process.prependOnceListener('SIGINT', onSigint);
+    process.once('exit', removePartial);
+
+    try {
+      await driver.dump(connection, {
+        stdout: (output) => writeSnapshotFile(partialPath, header, output),
+      });
+
+      if (interrupted) {
+        removePartial();
+        return;
+      }
+
+      process.off('exit', removePartial);
+      renameSync(partialPath, dump.path);
+    } catch (error) {
+      removePartial();
+
+      throw error;
+    } finally {
+      process.off('SIGINT', onSigint);
+      process.off('exit', removePartial);
+    }
 
     return {
       kind: 'create',

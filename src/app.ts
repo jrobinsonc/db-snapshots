@@ -14,6 +14,11 @@ const CLI_ARGUMENT_OFFSET = 2;
 
 const EXIT_USER_ERROR = 1;
 const EXIT_USAGE_ERROR = 2;
+const EXIT_INTERRUPTED = 130;
+
+process.on('SIGINT', () => {
+  process.exit(EXIT_INTERRUPTED);
+});
 
 try {
   const rawArguments = process.argv.slice(CLI_ARGUMENT_OFFSET);
@@ -81,6 +86,10 @@ try {
     printResult(result);
   }
 } catch (caught) {
+  if (caught instanceof Error && caught.name === 'ExitPromptError') {
+    process.exit(EXIT_INTERRUPTED);
+  }
+
   // yargs rejects unknown or invalid flags with a YError.
   const error =
     caught instanceof Error && caught.name === 'YError'

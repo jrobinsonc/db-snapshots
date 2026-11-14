@@ -103,6 +103,11 @@ export function createRunner(deps: RunnerDeps): ProcessRunner {
       // Drain both streams while the process runs so neither pipe fills up.
       let stderr: string;
       let exitCode: number;
+      const killProc = () => {
+        proc.kill();
+      };
+
+      process.once('exit', killProc);
 
       try {
         [stderr, exitCode] = await Promise.all([
@@ -115,6 +120,8 @@ export function createRunner(deps: RunnerDeps): ProcessRunner {
         proc.kill();
 
         throw error;
+      } finally {
+        process.off('exit', killProc);
       }
 
       if (exitCode !== 0) {
