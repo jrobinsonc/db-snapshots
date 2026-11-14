@@ -2,7 +2,7 @@
   "name": "@jrobinsonc/db-snapshots",
   "packageManager": "bun@1.4.4",
   "title": "Database Snapshots",
-  "description": "Fast, framework-agnostic CLI to snapshot and restore MySQL/MariaDB, PostgreSQL and SQLite databases. A single Bun-compiled binary (dbs) that works with any language or stack.",
+  "description": "Tool for creating and loading database snapshots.",
   "keywords": [
     "database",
     "snapshots",
