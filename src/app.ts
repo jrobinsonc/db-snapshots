@@ -66,7 +66,9 @@ try {
   const [commandName] = parseCliArguments(commandLineArguments);
 
   if (typeof commandName !== 'string' || commandName.length === 0) {
-    throw new UserError('Please provide a valid command', 'usage');
+    printError('Please provide a valid command');
+    console.error(`\n${renderGeneralHelp(listCommands())}`);
+    process.exit(EXIT_USAGE_ERROR);
   }
 
   const command = getCommand(commandName);

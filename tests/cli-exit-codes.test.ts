@@ -26,8 +26,18 @@ function spawn(
 }
 
 describe('cli exit codes', () => {
-  test('a missing command is a usage error (2)', () => {
-    expect(runCli().exitCode).toBe(2);
+  test('a missing command is a usage error (2) and lists valid commands', () => {
+    const { exitCode, output } = runCli();
+
+    expect(exitCode).toBe(2);
+    expect(output).toContain('Please provide a valid command');
+    expect(output).toContain('Commands:');
+    expect(output).toContain('init');
+    expect(output).toContain('create');
+    expect(output).toContain('load');
+    expect(output).toContain('list');
+    expect(output).toContain('delete');
+    expect(output).toContain('cleanup');
   });
 
   test('an unknown command is a usage error (2)', () => {
