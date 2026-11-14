@@ -22,6 +22,46 @@ interface LoadDeps {
 }
 
 /**
+ * Prepends SQL statements in front of a Snapshot stream without buffering
+ * the file in memory.
+ *
+ * @param statements - Non-empty SQL statements to run before the Snapshot.
+ * @param snapshot - The Snapshot file stream.
+ * @returns A stream yielding `statements` followed by `snapshot`.
+ */
+function prependStatements(
+  statements: string,
+  snapshot: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const prefix = new TextEncoder().encode(`${statements}\n`);
+  const reader = snapshot.getReader();
+  let prefixSent = false;
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (!prefixSent) {
+        prefixSent = true;
+        controller.enqueue(prefix);
+        return;
+      }
+
+      const { done, value } = await reader.read();
+
+      if (done) {
+        reader.releaseLock();
+        controller.close();
+        return;
+      }
+
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+}
+
+/**
  * Resolves the Snapshot to load: the exact Snapshot Name when one is given,
  * otherwise the one picked from the Snapshot Storage.
  *
@@ -110,8 +150,16 @@ export function createLoad(deps: LoadDeps): Command {
     progress(`Loading Snapshot "${snapshot.name}"...`);
 
     try {
+      const dropStatements = await driver.dropAllStatements(connection);
+      const file = Bun.file(snapshot.file);
+
       // Bun.file() is streamed into the client's stdin, never read into memory.
-      await driver.load(connection, { input: Bun.file(snapshot.file) });
+      await driver.load(connection, {
+        input:
+          dropStatements === ''
+            ? file
+            : prependStatements(dropStatements, file.stream()),
+      });
     } catch (error) {
       if (error instanceof UserError && error.code === 'client_failed') {
         throw new UserError(
@@ -127,7 +175,7 @@ export function createLoad(deps: LoadDeps): Command {
       kind: 'load',
       snapshot,
       connection: connectionName,
-      dropped: false,
+      dropped: true,
       duration_ms: Date.now() - startedAt,
     };
   };
