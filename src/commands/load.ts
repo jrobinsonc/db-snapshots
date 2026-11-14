@@ -1,14 +1,14 @@
 import { getDriver as defaultGetDriver } from '../drivers';
-import type { Command, Snapshot } from '../types';
+import type { Command } from '../types';
 import { UserError } from '../utils/exceptions';
 import { findConfigFile } from '../utils/find-config-file';
 import { loadConfig } from '../utils/load-config';
-import { progress } from '../utils/output';
+import { progress as defaultProgress } from '../utils/output';
 import { runner as defaultRunner } from '../utils/process-runner';
 import type { ProcessRunner } from '../utils/process-runner';
 import { ask as promptAsk } from '../utils/prompt';
 import { createConnectionResolver } from '../utils/resolve-connection';
-import { findSnapshot, listSnapshots } from '../utils/snapshot-repository';
+import { createSnapshotResolver } from '../utils/snapshot-repository';
 
 interface LoadDeps {
   /** The prompt helper's `ask`. */
@@ -17,6 +17,8 @@ interface LoadDeps {
   cwd: () => string;
   /** Looks up the Driver for a Connection. */
   getDriver: typeof defaultGetDriver;
+  /** Reports progress on stderr. */
+  progress?: typeof defaultProgress;
   /** The process runner used for binary preflight. */
   runner: ProcessRunner;
 }
@@ -62,66 +64,18 @@ function prependStatements(
 }
 
 /**
- * Resolves the Snapshot to load: the exact Snapshot Name when one is given,
- * otherwise the one picked from the Snapshot Storage.
- *
- * @param storage - The Snapshot Storage directory.
- * @param name - The Snapshot Name, as typed.
- * @param ask - The prompt helper.
- * @returns The Snapshot.
- * @throws {UserError} with code `snapshot_not_found` when there is no match.
- */
-async function resolveSnapshot(
-  storage: string,
-  name: string | undefined,
-  ask: typeof promptAsk,
-): Promise<Snapshot> {
-  if (name !== undefined) {
-    const snapshot = await findSnapshot(storage, name);
-
-    if (!snapshot) {
-      throw new UserError(
-        `Snapshot "${name}" was not found in ${storage}.`,
-        'snapshot_not_found',
-      );
-    }
-
-    return snapshot;
-  }
-
-  // Newest first, so the picker opens on the latest Snapshot.
-  const snapshots = await listSnapshots(storage);
-
-  if (snapshots.length === 0) {
-    throw new UserError(
-      `No Snapshots found in ${storage}.`,
-      'snapshot_not_found',
-    );
-  }
-
-  const { picked } = await ask<{ picked: Snapshot }>([
-    {
-      type: 'search',
-      name: 'picked',
-      message: 'Select the Snapshot:',
-      source: (_, input = '') =>
-        snapshots
-          .filter((snapshot) => snapshot.name.includes(input))
-          .map((snapshot) => ({ name: snapshot.name, value: snapshot })),
-    },
-  ]);
-
-  return picked;
-}
-
-/**
  * Builds the `load` command.
  *
  * @param deps - Overridable collaborators, for tests.
  * @returns The command.
  */
 export function createLoad(deps: LoadDeps): Command {
+  const reportProgress = deps.progress ?? defaultProgress;
   const resolveConnection = createConnectionResolver({ ask: deps.ask });
+  const resolveSnapshot = createSnapshotResolver({
+    ask: deps.ask,
+    progress: reportProgress,
+  });
 
   return async ({ args }) => {
     const config = loadConfig(findConfigFile(deps.cwd()));
@@ -129,7 +83,6 @@ export function createLoad(deps: LoadDeps): Command {
     const snapshot = await resolveSnapshot(
       config.storage,
       typeof nameArgument === 'string' ? nameArgument : undefined,
-      deps.ask,
     );
 
     const { name: connectionName, connection } =
@@ -147,7 +100,7 @@ export function createLoad(deps: LoadDeps): Command {
 
     const startedAt = Date.now();
 
-    progress(`Loading Snapshot "${snapshot.name}"...`);
+    reportProgress(`Loading Snapshot "${snapshot.name}"...`);
 
     try {
       const dropStatements = await driver.dropAllStatements(connection);

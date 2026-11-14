@@ -75,6 +75,7 @@ describe('commands/load', () => {
     const dropAllCalls: number[] = [];
     const loadCalls: number[] = [];
     const asked: Question[][] = [];
+    const progressMessages: string[] = [];
 
     const runner: ProcessRunner = {
       preflight(binary) {
@@ -121,6 +122,9 @@ describe('commands/load', () => {
       cwd: () => root,
       getDriver: () => driver,
       runner,
+      progress: (message) => {
+        progressMessages.push(message);
+      },
       ask: async <Answers>(questions: Question[]) => {
         asked.push(questions);
         if (harnessOptions.ask) {
@@ -137,6 +141,7 @@ describe('commands/load', () => {
       dropAllCalls,
       loadCalls,
       asked,
+      progressMessages,
     };
   }
 
@@ -349,7 +354,7 @@ describe('commands/load', () => {
     expect(result.duration_ms).toBeGreaterThanOrEqual(0);
   });
 
-  test('prompts for a Snapshot sorted newest first when no name argument is given', async () => {
+  test('prompts for a Snapshot sorted newest first with newest as default when no name argument is given', async () => {
     writeSnapshot('older', 'SELECT 1;\n', {
       driver: 'mysql',
       connection: 'local',
@@ -362,18 +367,25 @@ describe('commands/load', () => {
     });
 
     let offeredNames: string[] = [];
-    let filteredNames: string[] = [];
+    let filteredByInquirer: string[] = [];
+    let filteredByLegacy: string[] = [];
+    let defaultChoice: Snapshot | undefined;
     const { load, runs } = createHarness({
       tablesOutput: '',
       ask: async ([question]) => {
-        const all = (await question?.source?.({}, undefined)) as SearchChoice[];
-        const filtered = (await question?.source?.(
+        defaultChoice = question?.default as Snapshot | undefined;
+        const all = (await question?.source?.(undefined)) as SearchChoice[];
+        const inquirerFiltered = (await question?.source?.(
+          'old',
+        )) as SearchChoice[];
+        const legacyFiltered = (await question?.source?.(
           {},
           'old',
         )) as SearchChoice[];
 
         offeredNames = all.map((choice) => choice.name);
-        filteredNames = filtered.map((choice) => choice.name);
+        filteredByInquirer = inquirerFiltered.map((choice) => choice.name);
+        filteredByLegacy = legacyFiltered.map((choice) => choice.name);
 
         return { picked: all[0]?.value as Snapshot };
       },
@@ -382,12 +394,198 @@ describe('commands/load', () => {
     const result = (await load({ args: new Map() })) as LoadResult;
 
     expect(offeredNames).toEqual(['newer', 'older']);
-    expect(filteredNames).toEqual(['older']);
+    expect(defaultChoice?.name).toBe('newer');
+    expect(filteredByInquirer).toEqual(['older']);
+    expect(filteredByLegacy).toEqual(['older']);
     expect(result.snapshot.name).toBe('newer');
     expect(runs[1]?.stdinText).toContain('SELECT 2;');
   });
 
-  test('fails with snapshot_not_found when the Snapshot or storage has no match', async () => {
+  test('exact match wins over substring matches without prompting or printing a resolution note', async () => {
+    writeSnapshot('app', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-30T10:00:00Z',
+    });
+    writeSnapshot('app_2026-10-31', 'SELECT 2;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T10:00:00Z',
+    });
+
+    const { load, asked, progressMessages, runs } = createHarness();
+    const result = (await load({
+      args: new Map([[0, 'app']]),
+    })) as LoadResult;
+
+    expect(asked).toEqual([]);
+    expect(result.snapshot.name).toBe('app');
+    expect(progressMessages).toEqual(['Loading Snapshot "app"...']);
+    expect(runs[1]?.stdinText).toContain('SELECT 1;');
+  });
+
+  test('uses a single substring match without prompting and prints the resolved name', async () => {
+    writeSnapshot('baseline', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-30T10:00:00Z',
+    });
+    writeSnapshot('local_2026-10-31_21-30-00', 'SELECT 2;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T21:30:00Z',
+    });
+
+    const { load, asked, progressMessages, runs } = createHarness();
+    const result = (await load({
+      args: new Map([[0, '2026-10-31']]),
+    })) as LoadResult;
+
+    expect(asked).toEqual([]);
+    expect(result.snapshot.name).toBe('local_2026-10-31_21-30-00');
+    expect(progressMessages).toEqual([
+      'Resolved "2026-10-31" to Snapshot "local_2026-10-31_21-30-00".',
+      'Loading Snapshot "local_2026-10-31_21-30-00"...',
+    ]);
+    expect(runs[1]?.stdinText).toContain('SELECT 2;');
+  });
+
+  test('opens a filtered picker sorted newest first with newest as default for multiple substring matches', async () => {
+    writeSnapshot('unrelated', 'SELECT 0;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-11-01T10:00:00Z',
+    });
+    writeSnapshot('local_2026-10-30_10-00-00', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-30T10:00:00Z',
+    });
+    writeSnapshot('local_2026-10-31_10-00-00', 'SELECT 2;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T10:00:00Z',
+    });
+
+    let offeredNames: string[] = [];
+    let filteredNames: string[] = [];
+    let defaultChoice: Snapshot | undefined;
+    const { load, runs } = createHarness({
+      ask: async ([question]) => {
+        defaultChoice = question?.default as Snapshot | undefined;
+        const all = (await question?.source?.(undefined)) as SearchChoice[];
+        const filtered = (await question?.source?.('10-30')) as SearchChoice[];
+
+        offeredNames = all.map((choice) => choice.name);
+        filteredNames = filtered.map((choice) => choice.name);
+
+        return { picked: filtered[0]?.value as Snapshot };
+      },
+    });
+
+    const result = (await load({
+      args: new Map([[0, 'local_2026-10']]),
+    })) as LoadResult;
+
+    expect(offeredNames).toEqual([
+      'local_2026-10-31_10-00-00',
+      'local_2026-10-30_10-00-00',
+    ]);
+    expect(defaultChoice?.name).toBe('local_2026-10-31_10-00-00');
+    expect(filteredNames).toEqual(['local_2026-10-30_10-00-00']);
+    expect(result.snapshot.name).toBe('local_2026-10-30_10-00-00');
+    expect(runs[1]?.stdinText).toContain('SELECT 1;');
+  });
+
+  test('fails with ambiguous_snapshot listing candidates when multiple matches occur noninteractively', async () => {
+    writeSnapshot('local_2026-10-30_10-00-00', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-30T10:00:00Z',
+    });
+    writeSnapshot('local_2026-10-31_10-00-00', 'SELECT 2;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T10:00:00Z',
+    });
+
+    const { load, preflights, runs } = createHarness({
+      ask: () => {
+        throw new UserError(
+          'Input required but stdin is not a terminal: Select the Snapshot:',
+          'input_required',
+        );
+      },
+    });
+
+    const error = await load({
+      args: new Map([[0, 'local_2026']]),
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UserError);
+    expect((error as UserError).code).toBe('ambiguous_snapshot');
+    expect((error as UserError).candidates).toEqual([
+      'local_2026-10-31_10-00-00',
+      'local_2026-10-30_10-00-00',
+    ]);
+    expect((error as UserError).message).toContain('local_2026-10-31_10-00-00');
+    expect((error as UserError).message).toContain('local_2026-10-30_10-00-00');
+    expect(preflights).toEqual([]);
+    expect(runs).toEqual([]);
+  });
+
+  test('rethrows unexpected prompt errors during ambiguous snapshot resolution', async () => {
+    writeSnapshot('local_one', 'SELECT 1;\n');
+    writeSnapshot('local_two', 'SELECT 2;\n');
+
+    const failure = new Error('terminal broken');
+    const { load } = createHarness({
+      ask: () => {
+        throw failure;
+      },
+    });
+
+    const caught = await load({ args: new Map([[0, 'local']]) }).catch(
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBe(failure);
+  });
+
+  test('CLI exits with code 1 and prints ambiguous candidates or input_required when noninteractive', () => {
+    writeSnapshot('local_older', 'SELECT 1;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-30T10:00:00Z',
+    });
+    writeSnapshot('local_newer', 'SELECT 2;\n', {
+      driver: 'mysql',
+      connection: 'local',
+      created: '2026-10-31T10:00:00Z',
+    });
+
+    const ambiguous = Bun.spawnSync(['bun', ENTRYPOINT, 'load', 'local'], {
+      cwd: root,
+      stdin: 'ignore',
+    });
+
+    expect(ambiguous.exitCode).toBe(1);
+    expect(ambiguous.stdout.toString()).toBe('');
+    expect(ambiguous.stderr.toString()).toContain('local_newer');
+    expect(ambiguous.stderr.toString()).toContain('local_older');
+
+    const missingName = Bun.spawnSync(['bun', ENTRYPOINT, 'load'], {
+      cwd: root,
+      stdin: 'ignore',
+    });
+
+    expect(missingName.exitCode).toBe(1);
+    expect(missingName.stdout.toString()).toBe('');
+    expect(missingName.stderr.toString()).toContain('Error:');
+    expect(missingName.stderr.toString()).toContain('Select the Snapshot:');
+  });
+
+  test('fails with snapshot_not_found when the Snapshot, empty name, or storage has no match', async () => {
     const { load, preflights } = createHarness();
 
     const missingNamed = await load({
@@ -396,6 +594,17 @@ describe('commands/load', () => {
 
     expect(missingNamed).toBeInstanceOf(UserError);
     expect((missingNamed as UserError).code).toBe('snapshot_not_found');
+
+    writeSnapshot('baseline', 'SELECT 1;\n');
+
+    const missingEmpty = await load({
+      args: new Map([[0, '']]),
+    }).catch((caught: unknown) => caught);
+
+    expect(missingEmpty).toBeInstanceOf(UserError);
+    expect((missingEmpty as UserError).code).toBe('snapshot_not_found');
+
+    fs.rmSync(storage, { recursive: true, force: true });
 
     const missingAny = await load({ args: new Map() }).catch(
       (caught: unknown) => caught,
