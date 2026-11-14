@@ -42,7 +42,7 @@
     "dbs": "./index.ts"
   },
   "dependencies": {
-    "inquirer": "^14.2.5",
+    "inquirer": "^14.3.0",
     "yargs": "^18.2.0"
   },
   "devDependencies": {
