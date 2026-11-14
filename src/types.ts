@@ -62,9 +62,20 @@ export interface CleanupResult {
   dry_run: boolean;
 }
 
+/** The outcome of `delete`. */
+export interface DeleteResult {
+  kind: 'delete';
+  deleted: Snapshot;
+}
+
 /** What a command returns for the output layer to render. */
 export type CommandResult =
-  CreateResult | LoadResult | InitResult | ListResult | CleanupResult;
+  | CreateResult
+  | LoadResult
+  | InitResult
+  | ListResult
+  | CleanupResult
+  | DeleteResult;
 
 /** A command module's default export. Resolves to undefined when there is nothing to report. */
 export type Command = (

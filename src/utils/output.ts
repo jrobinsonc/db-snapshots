@@ -191,6 +191,13 @@ export function renderResult(result: CommandResult, color: boolean): string {
     case 'cleanup': {
       return result.deleted.map((snapshot) => snapshot.name).join('\n');
     }
+    case 'delete': {
+      return colorize(
+        `Snapshot deleted: ${result.deleted.name}`,
+        'green',
+        color,
+      );
+    }
   }
 }
 
