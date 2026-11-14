@@ -141,17 +141,37 @@ describe('commands/create', () => {
     expect(fs.readFileSync(file, 'utf8')).toContain('CREATE TABLE t;');
   });
 
-  test('sanitises the Snapshot Name into a safe file name', async () => {
+  test('keeps a Named Snapshot exact when all characters are in [A-Za-z0-9._-]', async () => {
     const { create } = createHarness({ root });
 
-    const result = await invoke(create, '  Release 1.2 / final  ');
+    const result = await invoke(create, 'Release_1.2.0--rc-1');
 
     expect(result).toMatchObject({
-      snapshot: { name: 'Release-1-2-final' },
+      snapshot: { name: 'Release_1.2.0--rc-1' },
     });
-    expect(fs.existsSync(path.join(storage, 'Release-1-2-final.sql'))).toBe(
+    expect(fs.existsSync(path.join(storage, 'Release_1.2.0--rc-1.sql'))).toBe(
       true,
     );
+  });
+
+  test('sanitizes characters outside [A-Za-z0-9._-] to - without collapsing or trimming', async () => {
+    const { create } = createHarness({ root });
+
+    const slashResult = await invoke(create, 'Release 1.2/final');
+    const spacedResult = await invoke(create, '  Release 1.2 / final@prod:1  ');
+
+    expect(slashResult).toMatchObject({
+      snapshot: { name: 'Release-1.2-final' },
+    });
+    expect(fs.existsSync(path.join(storage, 'Release-1.2-final.sql'))).toBe(
+      true,
+    );
+    expect(spacedResult).toMatchObject({
+      snapshot: { name: '--Release-1.2---final-prod-1--' },
+    });
+    expect(
+      fs.existsSync(path.join(storage, '--Release-1.2---final-prod-1--.sql')),
+    ).toBe(true);
   });
 
   test('names an Automatic Snapshot after the Connection and creation time', async () => {
@@ -176,6 +196,22 @@ describe('commands/create', () => {
     expect((error as UserError).code).toBe('usage');
     expect(dumps).toHaveLength(0);
   });
+
+  test.each(['.hidden', '..', '../escape'])(
+    'rejects Snapshot Name %p with a leading dot',
+    async (badName) => {
+      const { create, dumps } = createHarness({ root });
+
+      const error = await invoke(create, badName).catch(
+        (caught: unknown) => caught,
+      );
+
+      expect(error).toBeInstanceOf(UserError);
+      expect((error as UserError).code).toBe('usage');
+      expect(dumps).toHaveLength(0);
+      expect(fs.existsSync(storage)).toBe(false);
+    },
+  );
 
   test('keeps an existing Snapshot when the user declines to overwrite it', async () => {
     const file = writeExisting('baseline', 'OLD DUMP\n');
