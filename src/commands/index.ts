@@ -2,6 +2,7 @@ import type { Command } from '../types';
 import type { CliOptionDefinitions } from '../utils/parse-cli-arguments';
 import cleanup, { options as cleanupOptions } from './cleanup';
 import create, { options as createOptions } from './create';
+import deleteCommand, { options as deleteOptions } from './delete';
 import init, { options as initOptions } from './init';
 import list, { options as listOptions } from './list';
 import load, { options as loadOptions } from './load';
@@ -40,6 +41,12 @@ const commands: Readonly<Record<string, RegisteredCommand>> = {
     options: listOptions,
     description: 'List the snapshots in the Snapshot Storage.',
     usage: '',
+  },
+  delete: {
+    run: deleteCommand,
+    options: deleteOptions,
+    description: 'Delete a snapshot from the Snapshot Storage.',
+    usage: '[name]',
   },
   cleanup: {
     run: cleanup,

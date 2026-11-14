@@ -22,6 +22,7 @@ describe('cli help and version', () => {
     expect(exitCode).toBe(0);
     expect(output).toContain('create');
     expect(output).toContain('load');
+    expect(output).toContain('delete');
     expect(output).toContain('cleanup');
   });
 
@@ -31,6 +32,12 @@ describe('cli help and version', () => {
     expect(exitCode).toBe(0);
     expect(output).toContain('dbs load');
     expect(output).not.toContain('dbs create');
+
+    const deleteHelp = runCli('help', 'delete');
+
+    expect(deleteHelp.exitCode).toBe(0);
+    expect(deleteHelp.output).toContain('dbs delete');
+    expect(deleteHelp.output).not.toContain('dbs create');
   });
 
   test('<command> --help describes that command', () => {
@@ -38,6 +45,11 @@ describe('cli help and version', () => {
 
     expect(exitCode).toBe(0);
     expect(output).toContain('dbs create');
+
+    const deleteHelp = runCli('delete', '--help');
+
+    expect(deleteHelp.exitCode).toBe(0);
+    expect(deleteHelp.output).toContain('dbs delete');
   });
 
   test('help for an unknown command is a usage error (2)', () => {

@@ -130,6 +130,12 @@ describe('renderResult', () => {
       ),
     ).toBe('');
   });
+
+  test('describes a deleted snapshot', () => {
+    expect(renderResult({ kind: 'delete', deleted: snapshot }, false)).toBe(
+      'Snapshot deleted: baseline',
+    );
+  });
 });
 
 describe('renderError', () => {
