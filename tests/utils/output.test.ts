@@ -20,11 +20,17 @@ const snapshot: Snapshot = {
 };
 
 describe('isColorEnabled', () => {
-  test('is on only for a TTY without NO_COLOR', () => {
+  test('enables color for a TTY or non-empty FORCE_COLOR unless NO_COLOR is set', () => {
     expect(isColorEnabled({ isTTY: true }, {})).toBe(true);
     expect(isColorEnabled({ isTTY: false }, {})).toBe(false);
     expect(isColorEnabled({}, {})).toBe(false);
+    expect(isColorEnabled({ isTTY: false }, { FORCE_COLOR: '1' })).toBe(true);
+    expect(isColorEnabled({}, { FORCE_COLOR: '1' })).toBe(true);
+    expect(isColorEnabled({ isTTY: false }, { FORCE_COLOR: '' })).toBe(false);
     expect(isColorEnabled({ isTTY: true }, { NO_COLOR: '1' })).toBe(false);
+    expect(
+      isColorEnabled({ isTTY: false }, { FORCE_COLOR: '1', NO_COLOR: '1' }),
+    ).toBe(false);
   });
 });
 
@@ -145,14 +151,18 @@ describe('renderError', () => {
 });
 
 describe('disableColor', () => {
-  test('turns color off even for a TTY', () => {
+  test('turns color off even for a TTY or when FORCE_COLOR is set', () => {
     expect(isColorEnabled({ isTTY: true }, {})).toBe(true);
+    expect(isColorEnabled({ isTTY: false }, { FORCE_COLOR: '1' })).toBe(true);
 
     disableColor();
 
     try {
       expect(isColorEnabled({ isTTY: true }, {})).toBe(false);
       expect(isColorEnabled({ isTTY: true }, { FORCE_COLOR: '1' })).toBe(false);
+      expect(isColorEnabled({ isTTY: false }, { FORCE_COLOR: '1' })).toBe(
+        false,
+      );
     } finally {
       enableColor();
     }

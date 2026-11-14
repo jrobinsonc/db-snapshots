@@ -31,8 +31,8 @@ export function enableColor(): void {
  *
  * @param stream - The stream the text will be written to.
  * @param env - The process environment.
- * @returns True when the stream is a TTY and neither `--no-color` nor
- *   `NO_COLOR` is set.
+ * @returns True when neither `--no-color` nor `NO_COLOR` is set, and either
+ *   the stream is a TTY or `FORCE_COLOR` is set.
  */
 export function isColorEnabled(
   stream: TtyLike,
