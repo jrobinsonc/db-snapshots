@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import pkg from '../package.json';
+import { listCommands } from '../src/commands';
 
 const ENTRYPOINT = join(import.meta.dir, '..', 'index.ts');
 
@@ -16,14 +17,16 @@ function runCli(...args: string[]): { exitCode: number; output: string } {
 }
 
 describe('cli help and version', () => {
-  test.each(['--help', 'help'])('%s lists the commands', (arg) => {
+  test.each(['--help', 'help'])('%s lists every registered command', (arg) => {
     const { exitCode, output } = runCli(arg);
+    const registeredCommands = Object.keys(listCommands());
 
     expect(exitCode).toBe(0);
-    expect(output).toContain('create');
-    expect(output).toContain('load');
-    expect(output).toContain('delete');
-    expect(output).toContain('cleanup');
+    expect(registeredCommands.length).toBeGreaterThan(0);
+
+    for (const commandName of registeredCommands) {
+      expect(output).toContain(commandName);
+    }
   });
 
   test('help <command> describes that command', () => {
