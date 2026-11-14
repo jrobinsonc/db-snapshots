@@ -3,7 +3,7 @@ import type { Command, Snapshot } from '../types';
 import { UserError } from '../utils/exceptions';
 import { findConfigFile } from '../utils/find-config-file';
 import { loadConfig } from '../utils/load-config';
-import { progress as defaultProgress } from '../utils/output';
+import { progress } from '../utils/output';
 import { runner as defaultRunner } from '../utils/process-runner';
 import type { ProcessRunner } from '../utils/process-runner';
 import { ask as promptAsk } from '../utils/prompt';
@@ -11,16 +11,14 @@ import { createConnectionResolver } from '../utils/resolve-connection';
 import { findSnapshot, listSnapshots } from '../utils/snapshot-repository';
 
 interface LoadDeps {
-  /** The directory used to locate the project config. */
-  cwd: () => string;
   /** The prompt helper's `ask`. */
   ask: typeof promptAsk;
-  /** Looks up the Driver a Connection declares. */
+  /** The directory used to locate the project config. */
+  cwd: () => string;
+  /** Looks up the Driver for a Connection. */
   getDriver: typeof defaultGetDriver;
-  /** The process runner, for binary preflight. */
+  /** The process runner used for binary preflight. */
   runner: ProcessRunner;
-  /** Reports progress on stderr. */
-  progress: typeof defaultProgress;
 }
 
 /**
@@ -69,7 +67,7 @@ function prependStatements(
  *
  * @param storage - The Snapshot Storage directory.
  * @param name - The Snapshot Name, as typed.
- * @param ask - Prompt helper for selecting from available Snapshots.
+ * @param ask - The prompt helper.
  * @returns The Snapshot.
  * @throws {UserError} with code `snapshot_not_found` when there is no match.
  */
@@ -138,11 +136,18 @@ export function createLoad(deps: LoadDeps): Command {
       await resolveConnection(config);
     const driver = deps.getDriver(connection.driver);
 
+    if (snapshot.driver !== null && snapshot.driver !== driver.name) {
+      throw new UserError(
+        `Snapshot "${snapshot.name}" was created with Driver "${snapshot.driver}" and cannot be loaded into Connection "${connectionName}" (Driver "${driver.name}").`,
+        'driver_mismatch',
+      );
+    }
+
     deps.runner.preflight(driver.binaries.load);
 
     const startedAt = Date.now();
 
-    deps.progress(`Loading Snapshot "${snapshot.name}"...`);
+    progress(`Loading Snapshot "${snapshot.name}"...`);
 
     try {
       const dropStatements = await driver.dropAllStatements(connection);
@@ -177,11 +182,10 @@ export function createLoad(deps: LoadDeps): Command {
 }
 
 export default createLoad({
-  cwd: () => process.cwd(),
   ask: promptAsk,
+  cwd: () => process.cwd(),
   getDriver: defaultGetDriver,
   runner: defaultRunner,
-  progress: defaultProgress,
 });
 
 export const options = {};

@@ -22,6 +22,7 @@ describe('cli help and version', () => {
     expect(exitCode).toBe(0);
     expect(output).toContain('create');
     expect(output).toContain('load');
+    expect(output).toContain('cleanup');
   });
 
   test('help <command> describes that command', () => {

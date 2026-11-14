@@ -178,7 +178,7 @@ export function renderResult(result: CommandResult, color: boolean): string {
       }
 
       const advice = colorize(
-        `The password was not written to the config. Add ${result.password_env_var}=<your password> to .env and keep .env out of version control.`,
+        'The password was not written to the config. Add your password environment variable to .env and keep .env out of version control.',
         'yellow',
         color,
       );
@@ -187,6 +187,9 @@ export function renderResult(result: CommandResult, color: boolean): string {
     }
     case 'list': {
       return renderSnapshotTable(result.snapshots);
+    }
+    case 'cleanup': {
+      return result.deleted.map((snapshot) => snapshot.name).join('\n');
     }
   }
 }
@@ -208,7 +211,11 @@ export function renderError(message: string, color: boolean): string {
  * @param result - The result a command returned.
  */
 export function printResult(result: CommandResult): void {
-  console.log(renderResult(result, isColorEnabled(process.stdout)));
+  const text = renderResult(result, isColorEnabled(process.stdout));
+
+  if (text.length > 0) {
+    console.log(text);
+  }
 }
 
 /**

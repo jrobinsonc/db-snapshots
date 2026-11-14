@@ -95,8 +95,40 @@ describe('renderResult', () => {
     );
 
     expect(text).toStartWith('Config written: /app/.db-snapshots.json\n');
-    expect(text).toContain('DB_PASSWORD=');
+    expect(text).toContain('The password was not written to the config.');
+    expect(text).toContain('password environment variable');
     expect(text).toContain('.env');
+  });
+
+  test('lists each deleted snapshot name for cleanup', () => {
+    expect(
+      renderResult(
+        {
+          kind: 'cleanup',
+          deleted: [
+            { ...snapshot, name: 'local_2026-10-31_10-00-00' },
+            { ...snapshot, name: 'local_2026-10-31_09-00-00' },
+          ],
+          kept: [],
+          dry_run: false,
+        },
+        false,
+      ),
+    ).toBe('local_2026-10-31_10-00-00\nlocal_2026-10-31_09-00-00');
+  });
+
+  test('returns an empty string for cleanup when nothing was deleted', () => {
+    expect(
+      renderResult(
+        {
+          kind: 'cleanup',
+          deleted: [],
+          kept: [snapshot],
+          dry_run: false,
+        },
+        false,
+      ),
+    ).toBe('');
   });
 });
 
