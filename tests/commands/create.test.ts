@@ -4,12 +4,19 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createCreate } from '../../src/commands/create';
+import { createMysqlDriver } from '../../src/drivers/mysql';
 import type { Driver, DumpOptions } from '../../src/drivers/types';
 import { UserError } from '../../src/utils/exceptions';
 import { CONFIG_FILE_NAME } from '../../src/utils/find-config-file';
 import type { ConnectionConfig } from '../../src/utils/load-config';
+import { createRunner } from '../../src/utils/process-runner';
 import type { ProcessRunner } from '../../src/utils/process-runner';
 import { parseSnapshotHeader } from '../../src/utils/snapshot-header';
+
+const ENTRYPOINT = path.join(import.meta.dir, '..', '..', 'index.ts');
+const EXIT_INTERRUPTED = 130;
+const PARTIAL_WAIT_TIMEOUT_MS = 5000;
+const PARTIAL_POLL_INTERVAL_MS = 10;
 
 /** A fixed local-time instant: 31 Oct 2026, 21:30:00. */
 const NOW = new Date(2026, 9, 31, 21, 30, 0);
@@ -27,14 +34,21 @@ interface HarnessOptions {
   dumpBody?: string;
   confirmAnswer?: boolean;
   preflightError?: Error;
+  driver?: Driver;
+  runner?: ProcessRunner;
+  onDump?: (
+    connection: ConnectionConfig,
+    dumpOptions: DumpOptions,
+  ) => Promise<void>;
 }
 
 function createHarness(options: HarnessOptions) {
   const preflights: string[] = [];
   const confirmations: string[] = [];
   const dumps: ConnectionConfig[] = [];
+  const exitCodes: number[] = [];
 
-  const runner: ProcessRunner = {
+  const runner: ProcessRunner = options.runner ?? {
     preflight(binary) {
       preflights.push(binary);
       if (options.preflightError) {
@@ -44,7 +58,7 @@ function createHarness(options: HarnessOptions) {
     run: unused as ProcessRunner['run'],
   };
 
-  const driver: Driver = {
+  const driver: Driver = options.driver ?? {
     name: 'mysql',
     binaries: { dump: 'mysqldump', load: 'mysql' },
     defaultDumpFlags: async () => [],
@@ -54,6 +68,10 @@ function createHarness(options: HarnessOptions) {
     load: unused,
     async dump(connection: ConnectionConfig, dumpOptions: DumpOptions) {
       dumps.push(connection);
+      if (options.onDump) {
+        await options.onDump(connection, dumpOptions);
+        return;
+      }
       await dumpOptions.stdout(streamOf(options.dumpBody ?? 'SELECT 1;\n'));
     },
   };
@@ -68,9 +86,12 @@ function createHarness(options: HarnessOptions) {
     getDriver: () => driver,
     runner,
     now: () => NOW,
+    exit: (code) => {
+      exitCodes.push(code);
+    },
   });
 
-  return { create, preflights, confirmations, dumps };
+  return { create, preflights, confirmations, dumps, exitCodes };
 }
 
 describe('commands/create', () => {
@@ -277,5 +298,247 @@ describe('commands/create', () => {
     expect(preflights).toHaveLength(0);
     expect(dumps).toHaveLength(0);
     expect(fs.existsSync(storage)).toBe(false);
+  });
+
+  test('writes output to <file>.partial first and renames it to <file> on success', async () => {
+    const file = path.join(storage, 'baseline.sql');
+    const partialFile = `${file}.partial`;
+    let sawPartialDuringDump = false;
+    let sawFinalDuringDump = false;
+    let partialContentDuringDump = '';
+
+    const { create } = createHarness({
+      root,
+      onDump: async (_connection, dumpOptions) => {
+        await dumpOptions.stdout(streamOf('CREATE TABLE t (id INT);\n'));
+        sawPartialDuringDump = fs.existsSync(partialFile);
+        sawFinalDuringDump = fs.existsSync(file);
+        partialContentDuringDump = fs.readFileSync(partialFile, 'utf8');
+      },
+    });
+
+    const result = await invoke(create, 'baseline');
+
+    expect(sawPartialDuringDump).toBe(true);
+    expect(sawFinalDuringDump).toBe(false);
+    expect(partialContentDuringDump).toContain('-- db-snapshots:');
+    expect(partialContentDuringDump).toContain('CREATE TABLE t (id INT);');
+    expect(result).toMatchObject({
+      kind: 'create',
+      snapshot: { name: 'baseline', file },
+    });
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(file)).toBe(true);
+    expect(fs.readFileSync(file, 'utf8')).toBe(partialContentDuringDump);
+  });
+
+  test('removes <file>.partial and reports the client stderr when the dump client fails', async () => {
+    const file = path.join(storage, 'baseline.sql');
+    const partialFile = `${file}.partial`;
+    const clientStderr = "mysqldump: Got error: 1049: Unknown database 'app'";
+    const runner = createRunner({
+      which: () => '/usr/bin/mysqldump',
+      spawn: (command) => {
+        if (command.includes('--version')) {
+          return {
+            stdout: streamOf('mysqldump  Ver 8.0.36\n'),
+            stderr: streamOf(''),
+            exited: Promise.resolve(0),
+            kill: () => {},
+          };
+        }
+
+        return {
+          stdout: streamOf('CREATE TABLE partial (id INT);\n'),
+          stderr: streamOf(`${clientStderr}\n`),
+          exited: Promise.resolve(2),
+          kill: () => {},
+        };
+      },
+    });
+    const driver = createMysqlDriver({ runner, tempDir: () => root });
+    const { create } = createHarness({ root, driver, runner });
+
+    const error = await invoke(create, 'baseline').catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(UserError);
+    expect((error as UserError).code).toBe('client_failed');
+    expect((error as UserError).message).toContain(clientStderr);
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  test('removes <file>.partial and leaves an existing Snapshot intact when an overwrite fails', async () => {
+    const file = writeExisting('baseline', 'OLD DUMP\n');
+    const partialFile = `${file}.partial`;
+
+    const { create } = createHarness({
+      root,
+      confirmAnswer: true,
+      onDump: async (_connection, dumpOptions) => {
+        await dumpOptions.stdout(streamOf('HALF WRITTEN\n'));
+        expect(fs.existsSync(partialFile)).toBe(true);
+        throw new UserError(
+          'mysqldump failed: lost connection',
+          'client_failed',
+        );
+      },
+    });
+
+    const error = await invoke(create, 'baseline').catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(UserError);
+    expect((error as UserError).code).toBe('client_failed');
+    expect((error as UserError).message).toContain('lost connection');
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toBe('OLD DUMP\n');
+  });
+
+  test('removes <file>.partial when writing the dump stream fails mid-stream', async () => {
+    const file = path.join(storage, 'baseline.sql');
+    const partialFile = `${file}.partial`;
+
+    const { create } = createHarness({
+      root,
+      onDump: async (_connection, dumpOptions) => {
+        const failingStream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode('CREATE TABLE t (id INT);\n'),
+            );
+            controller.error(new Error('stream broken'));
+          },
+        });
+
+        await dumpOptions.stdout(failingStream);
+      },
+    });
+
+    const error = await invoke(create, 'baseline').catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('stream broken');
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  test('removes <file>.partial and exits 130 when interrupted by SIGINT', async () => {
+    const file = path.join(storage, 'baseline.sql');
+    const partialFile = `${file}.partial`;
+
+    const { create, exitCodes } = createHarness({
+      root,
+      onDump: async (_connection, dumpOptions) => {
+        await dumpOptions.stdout(streamOf('CREATE TABLE t (id INT);\n'));
+        expect(fs.existsSync(partialFile)).toBe(true);
+        process.emit('SIGINT', 'SIGINT');
+      },
+    });
+
+    const result = await invoke(create, 'baseline');
+
+    expect(result).toBeUndefined();
+    expect(exitCodes).toEqual([EXIT_INTERRUPTED]);
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  test('CLI removes <file>.partial and exits 130 on Ctrl-C (SIGINT) during dump', async () => {
+    const binDir = path.join(root, 'bin');
+    const partialFile = path.join(storage, 'baseline.sql.partial');
+    const finalFile = path.join(storage, 'baseline.sql');
+
+    fs.mkdirSync(binDir);
+    fs.writeFileSync(
+      path.join(binDir, 'mysqldump'),
+      [
+        '#!/bin/sh',
+        'if [ "$1" = "--version" ]; then',
+        '  echo "mysqldump  Ver 8.0.36"',
+        '  exit 0',
+        'fi',
+        'printf "CREATE TABLE t (id INT);\\n"',
+        'exec sleep 60',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    const proc = Bun.spawn(['bun', ENTRYPOINT, 'create', 'baseline'], {
+      cwd: root,
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
+      },
+    });
+
+    const deadline = Date.now() + PARTIAL_WAIT_TIMEOUT_MS;
+
+    while (
+      (!fs.existsSync(partialFile) || fs.statSync(partialFile).size === 0) &&
+      Date.now() < deadline
+    ) {
+      await Bun.sleep(PARTIAL_POLL_INTERVAL_MS);
+    }
+
+    expect(fs.existsSync(partialFile)).toBe(true);
+    expect(fs.existsSync(finalFile)).toBe(false);
+
+    proc.kill('SIGINT');
+
+    const exitCode = await proc.exited;
+
+    expect(exitCode).toBe(EXIT_INTERRUPTED);
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(finalFile)).toBe(false);
+  });
+
+  test('CLI removes <file>.partial and reports client stderr on failure', async () => {
+    const binDir = path.join(root, 'bin');
+    const partialFile = path.join(storage, 'baseline.sql.partial');
+    const finalFile = path.join(storage, 'baseline.sql');
+
+    fs.mkdirSync(binDir);
+    fs.writeFileSync(
+      path.join(binDir, 'mysqldump'),
+      [
+        '#!/bin/sh',
+        'if [ "$1" = "--version" ]; then',
+        '  echo "mysqldump  Ver 8.0.36"',
+        '  exit 0',
+        'fi',
+        'printf "CREATE TABLE partial (id INT);\\n"',
+        'printf "mysqldump: Got error: 1045: Access denied\\n" >&2',
+        'exit 2',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    const result = Bun.spawnSync(['bun', ENTRYPOINT, 'create', 'baseline'], {
+      cwd: root,
+      stdin: 'ignore',
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env['PATH'] ?? ''}`,
+      },
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout.toString()).toBe('');
+    expect(result.stderr.toString()).toContain(
+      'mysqldump: Got error: 1045: Access denied',
+    );
+    expect(fs.existsSync(partialFile)).toBe(false);
+    expect(fs.existsSync(finalFile)).toBe(false);
   });
 });

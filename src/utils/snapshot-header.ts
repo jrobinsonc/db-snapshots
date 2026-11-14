@@ -123,6 +123,7 @@ export async function writeSnapshotFile(
 
   try {
     sink.write(`${formatSnapshotHeader(header)}\n`);
+    await sink.flush();
 
     for await (const chunk of output) {
       await sink.write(chunk);
