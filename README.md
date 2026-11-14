@@ -135,19 +135,20 @@ Deletes older **Automatic Snapshots** (`<connection>_<YYYY-MM-DD_HH-mm-ss>` whos
 
 ### Requirements
 
-- [MySQL client CLI v8+](https://dev.mysql.com/doc/mysql-shell/en/mysql-shell-install.html)
 - [Bun v1.4.4+](https://bun.com/docs/installation)
+- [MySQL client CLI (`mysql` and `mysqldump`)](https://dev.mysql.com/doc/)
 
-### Install
+### Install, check, test and build
 
-Install dependencies and run checks with Bun's built-in tools:
+Install dependencies, run static checks, run the test suite and compile the standalone binary with Bun:
 
 ```sh
 bun install
 bun check         # type check
 bun fmt --check   # check formatting (run `bun fmt` to fix)
 bun lint          # lint (Bun canary builds only, for now)
-bun test
+bun run test      # run the test suite (or `bun test`)
+bun run build     # compile the standalone binary to dist/dbs
 ```
 
-The project has no `lint`, `check` or `fmt` scripts on purpose: a script with one of those names would shadow Bun's built-in command.
+The project has no `lint`, `check` or `fmt` scripts in `package.json` on purpose (run `bun lint` directly rather than `bun run lint`): a script with one of those names would shadow Bun's built-in command.
