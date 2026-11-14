@@ -17,6 +17,7 @@ import type { Command } from '../types';
 
 const EXIT_INTERRUPTED = 130;
 const PARTIAL_SUFFIX = '.partial';
+const SNAPSHOT_EXTENSIONS = ['.sql', '.sql.gz'] as const;
 
 interface CreateDeps {
   /** The prompt helper's `ask`. */
@@ -83,6 +84,32 @@ interface DumpFile {
 }
 
 /**
+ * Returns every Snapshot file path in `storage` that maps to `name`
+ * (`.sql` and `.sql.gz`).
+ *
+ * @param storage - The Snapshot Storage directory.
+ * @param name - The Snapshot Name.
+ * @returns The candidate paths for both extensions.
+ */
+function snapshotPaths(storage: string, name: string): string[] {
+  return SNAPSHOT_EXTENSIONS.map((extension) =>
+    join(storage, `${name}${extension}`),
+  );
+}
+
+/**
+ * Removes any existing `.sql` and `.sql.gz` files for `name` in `storage`.
+ *
+ * @param storage - The Snapshot Storage directory.
+ * @param name - The Snapshot Name being overwritten.
+ */
+function removeExistingSnapshots(storage: string, name: string): void {
+  for (const existingPath of snapshotPaths(storage, name)) {
+    rmSync(existingPath, { force: true });
+  }
+}
+
+/**
  * Locates the Snapshot file for a Snapshot Name in the Snapshot Storage.
  *
  * @param name - The Snapshot Name.
@@ -96,13 +123,26 @@ async function getDump(
   confirm: typeof promptConfirm,
 ): Promise<DumpFile | undefined> {
   const path = join(storage, `${name}.sql`);
-  const exists = existsSync(path);
+  const exists = snapshotPaths(storage, name).some((candidate) =>
+    existsSync(candidate),
+  );
 
   // If the file already exists, ask if the user wants to overwrite it.
   if (exists) {
-    const confirmed = await confirm(
-      "You're sure you want to overwrite this file?",
-    );
+    let confirmed: boolean;
+
+    try {
+      confirmed = await confirm("You're sure you want to overwrite this file?");
+    } catch (error) {
+      if (error instanceof UserError && error.code === 'input_required') {
+        throw new UserError(
+          `Snapshot "${name}" already exists in ${storage}.`,
+          'snapshot_exists',
+        );
+      }
+
+      throw error;
+    }
 
     if (!confirmed) {
       return;
@@ -181,6 +221,13 @@ export function createCreate(deps: CreateDeps): Command {
       }
 
       process.off('exit', removePartial);
+
+      // Remove both `.sql` and `.sql.gz` only once the partial file is complete,
+      // so a failed or interrupted dump leaves any existing Snapshot intact.
+      if (dump.exists) {
+        removeExistingSnapshots(config.storage, dump.name);
+      }
+
       renameSync(partialPath, dump.path);
     } catch (error) {
       removePartial();
