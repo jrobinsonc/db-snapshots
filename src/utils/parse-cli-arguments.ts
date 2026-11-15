@@ -1,4 +1,5 @@
 import yargs from 'yargs';
+import { UserError } from './exceptions';
 
 /** CLI arguments keyed by flag name, or by index for positional arguments. */
 export type CliArguments = Map<string | number, unknown>;
@@ -55,8 +56,14 @@ export default function parseCliArguments(
   // Positionals such as Snapshot Names are used exactly as typed: `007`
   // must not become the number 7.
   parser.parserConfiguration({ 'parse-positional-numbers': false });
+  parser.help(false);
+  parser.version(false);
   parser.strictOptions(true);
   parser.exitProcess(false);
+  parser.showHelpOnFail(false);
+  parser.fail((message: string, error?: Error) => {
+    throw error ?? new UserError(message, 'usage');
+  });
 
   const parsed = parser.parseSync() as {
     _: Array<string | number>;
