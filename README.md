@@ -20,7 +20,21 @@ Take a snapshot before running migrations, switching branches, or testing querie
 
 ## Installation
 
-There are no prebuilt binaries yet. To build `dbs` from source you need [Bun](https://bun.com/docs/installation):
+### Download (Linux x64)
+
+Download `dbs` from the [latest release](https://github.com/jrobinsonc/db-snapshots/releases/latest), make it executable and put it on your `PATH`:
+
+```sh
+curl -fsSL -o dbs https://github.com/jrobinsonc/db-snapshots/releases/latest/download/dbs
+chmod +x dbs
+sudo mv dbs /usr/local/bin/
+```
+
+The binary is self-contained, so the machine you run it on doesn't need Bun.
+
+### Build from source (other platforms)
+
+Prebuilt binaries are only available for Linux x64 for now. On other platforms, build `dbs` with [Bun](https://bun.com/docs/installation):
 
 ```sh
 git clone https://github.com/jrobinsonc/db-snapshots.git
@@ -29,7 +43,7 @@ bun install
 bun run build   # creates dist/dbs
 ```
 
-Copy `dist/dbs` anywhere on your `PATH`. The binary is self-contained, so the machine you run it on doesn't need Bun.
+Then copy `dist/dbs` anywhere on your `PATH`.
 
 ## Quick start
 
