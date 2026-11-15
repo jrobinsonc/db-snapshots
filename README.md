@@ -12,20 +12,137 @@ Take a snapshot before running migrations, switching branches, or testing querie
 
 ## Requirements
 
-`dbs` streams Snapshots through each Driver's standard client binaries ([ADR-0001](docs/adr/0001-load-through-client-binaries.md)).
+`dbs` works with MySQL and MariaDB. The MySQL client tools must be installed and on your `PATH`:
 
-For the `mysql` Driver (MySQL and MariaDB), both client binaries must be available on `PATH`:
+- `mysqldump`, to create snapshots
+- `mysql`, to load them
 
-- `mysqldump` — used by `dbs create`
-- `mysql` — used by `dbs load`
+## Installation
 
-The compiled `dbs` binary is self-contained and does not require Bun on the machine where it runs.
+There are no prebuilt binaries yet. To build `dbs` from source you need [Bun](https://bun.com/docs/installation):
+
+```sh
+git clone https://github.com/jrobinsonc/db-snapshots.git
+cd db-snapshots
+bun install
+bun run build   # creates dist/dbs
+```
+
+Copy `dist/dbs` anywhere on your `PATH`. The binary is self-contained, so the machine you run it on doesn't need Bun.
+
+## Quick start
+
+```sh
+dbs init                   # set up your connection in .db-snapshots.json
+dbs create before-migration  # take a snapshot
+# ...run migrations, break things...
+dbs load before-migration    # put the database back the way it was
+```
+
+## Commands
+
+### `dbs init`
+
+Creates `.db-snapshots.json` in the current directory by asking for your connection details: connection name, host, port, user, password and database.
+
+```sh
+dbs init
+```
+
+Good to know:
+
+- If you type a password, it isn't saved in the file. The file gets `"${DB_PASSWORD}"` instead, and you're advised to keep the password in `.env`. See the [note on passwords](#passwords) first, because this doesn't work yet.
+- It won't overwrite an existing `.db-snapshots.json`.
+
+### `dbs create [name]`
+
+Takes a snapshot of your database and saves it to snapshot storage.
+
+```sh
+dbs create                 # automatic snapshot, e.g. local_2026-11-15_09-30-00
+dbs create before-migration  # named snapshot
+```
+
+Good to know:
+
+- Without a name you get an **automatic snapshot**, named after the connection and the current time. `dbs cleanup` removes old ones for you.
+- With a name you get a **named snapshot**, which `dbs cleanup` never removes. Use these for baselines you want to keep.
+- Names can contain letters, digits, `.`, `_` and `-`. Any other character becomes `-` (`my db!` is saved as `my-db-`), and a name can't start with a dot.
+- If a snapshot with that name already exists, you're asked whether to overwrite it (default No).
+- Press `Ctrl-C` to cancel. No partial snapshot is left behind.
+
+### `dbs load [name]`
+
+> [!CAUTION]
+> Loading **drops every table and view** in the target database before loading the snapshot. Anything not in the snapshot is lost. Stored routines and events are left as they are.
+
+Loads a snapshot into your database, replacing its tables and views.
+
+```sh
+dbs load before-migration  # exact name
+dbs load migration         # part of a name also works
+dbs load                   # pick from a list, newest first
+```
+
+Good to know:
+
+- If part of a name matches more than one snapshot, you pick from the matches.
+- A snapshot can only be loaded into a database of the same type it was taken from (MySQL and MariaDB count as the same type). A mismatch is caught before anything is dropped.
+
+### `dbs list`
+
+Lists the snapshots in snapshot storage, newest first.
+
+```sh
+dbs list
+```
+
+```text
+Name                           Connection  Driver  Created at           Size       Compressed
+before-migration               local       mysql   2026-11-15 09:30:00  12.4 MiB   no
+local_2026-11-14_18-02-11      local       mysql   2026-11-14 18:02:11  12.1 MiB   no
+```
+
+Snapshot files that weren't created by `dbs` show `—` for the details it can't know.
+
+### `dbs delete [name]`
+
+Deletes a snapshot from snapshot storage. It finds the snapshot the same way `dbs load` does: by exact name, part of a name, or from a list.
+
+```sh
+dbs delete before-migration
+dbs delete              # pick from a list
+```
+
+Good to know:
+
+- If you typed only part of the name, you're asked to confirm before anything is deleted (default No).
+- It doesn't touch your database, and the MySQL client tools don't need to be installed.
+
+### `dbs cleanup`
+
+Deletes old automatic snapshots, keeping the newest 2 for each connection.
+
+```sh
+dbs cleanup
+```
+
+Good to know:
+
+- Named snapshots are never deleted, and neither are snapshot files that weren't created by `dbs`.
+- Each deleted snapshot is printed.
+
+### Global options
+
+| Option                                            | Description                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `--help`, `-h`, `dbs help [command]`              | Show general help, or help for one command.                              |
+| `--version`                                       | Print the `dbs` version.                                                 |
+| `--no-color` (or set the `NO_COLOR` env variable) | Turn off colored output. Color is also off when output isn't a terminal. |
 
 ## Configuration
 
-Configuration lives in `.db-snapshots.json` at the project root, discovered automatically by walking up from the current working directory. If no config file is found, commands fail with instructions to run `dbs init`.
-
-Example `.db-snapshots.json`:
+`dbs` reads `.db-snapshots.json`, usually created by `dbs init`. It looks in the current directory and then each parent directory, so you can run `dbs` from anywhere in your project.
 
 ```json
 {
@@ -47,108 +164,54 @@ Example `.db-snapshots.json`:
 
 ### Top-level fields
 
-| Field                | Type     | Required / Default     | Description                                                                                             |
-| -------------------- | -------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| `$schema`            | `string` | Optional               | Reference to `db-snapshots.schema.json` for editor autocomplete and validation (written by `dbs init`). |
-| `default_connection` | `string` | Optional               | Name of the Connection used when none is specified.                                                     |
-| `storage`            | `string` | Default: `"snapshots"` | Snapshot Storage directory, resolved relative to the directory containing `.db-snapshots.json`.         |
-| `connections`        | `object` | Required               | Named Connections (at least one entry is required).                                                     |
+| Field                | Required | Description                                                                                                           |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `connections`        | Yes      | Your connections, by name. At least one is required.                                                                  |
+| `default_connection` | No       | The connection to use when you have more than one. See [Which connection is used](#which-connection-is-used).         |
+| `storage`            | No       | Snapshot storage: the directory where snapshots are saved, relative to `.db-snapshots.json`. Defaults to `snapshots`. |
+| `$schema`            | No       | Turns on autocomplete and validation in editors that support JSON Schema (`dbs init` adds it).                        |
+
+Unknown fields are rejected, so a typo in a field name shows up as an error instead of being silently ignored.
 
 ### Connection fields
 
-| Field      | Type                | Required                | Description                                                                                                                                                                                                       |
-| ---------- | ------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `driver`   | `"mysql"`           | Required                | The Driver the Connection speaks (`mysql` covers both MySQL and MariaDB).                                                                                                                                         |
-| `host`     | `string`            | Optional                | Database server host (when omitted, the client binary's own default applies).                                                                                                                                     |
-| `port`     | `integer \| string` | Optional                | Database server port number, or a string for environment-variable interpolation.                                                                                                                                  |
-| `user`     | `string`            | Optional                | Database username.                                                                                                                                                                                                |
-| `password` | `string`            | Optional                | Database password. Never written literally by `dbs init` (use `${DB_PASSWORD}`). Passed to `mysql` / `mysqldump` via a temporary `0600` option file (`--defaults-extra-file`), never on the process command line. |
-| `database` | `string`            | Required for operations | Database name to snapshot or load into.                                                                                                                                                                           |
+| Field      | Required | Description                                                                                 |
+| ---------- | -------- | ------------------------------------------------------------------------------------------- |
+| `driver`   | Yes      | The database type. Only `mysql` is supported for now, and it covers both MySQL and MariaDB. |
+| `database` | Yes      | The database to snapshot and load into.                                                     |
+| `host`     | No       | Database server host. Defaults to whatever the MySQL client tools use.                      |
+| `port`     | No       | Database server port.                                                                       |
+| `user`     | No       | Database user.                                                                              |
+| `password` | No       | Database password. See [Passwords](#passwords).                                             |
 
-The config is validated strictly against [`db-snapshots.schema.json`](db-snapshots.schema.json); unknown fields are rejected.
+### Passwords
 
-### Connection resolution
+The password is never passed on the command line, so it doesn't show up in process lists.
 
-`dbs create` and `dbs load` resolve the target Connection in order:
+> [!NOTE]
+> Environment variables such as `"${DB_PASSWORD}"` are **not supported yet** ([#45](https://github.com/jrobinsonc/db-snapshots/issues/45)). They're sent as the literal text. Until then, either put the password in the file (and keep that file out of version control) or leave `password` out.
 
-1. `default_connection` (an unknown Connection name is an immediate error and never falls through).
-2. The only Connection, if `connections` has exactly one entry.
-3. An interactive Connection picker when `stdin` is a TTY, or an error listing available Connection names when noninteractive.
+### Which connection is used
 
-## Commands
+When `dbs create` or `dbs load` runs:
 
-### `dbs init`
+- If you set `default_connection`, that connection is used. If the name doesn't match any connection, you get an error.
+- If you have only one connection, that one is used.
+- Otherwise you pick from a list of your connections.
 
-Interactively creates `.db-snapshots.json` in the current directory for one MySQL Connection (prompts for Connection name, host, port, user, password and database).
+## Scripting and CI
 
-- Writes `$schema` pointing to `db-snapshots.schema.json`.
-- Never writes a literal password: if a literal password is entered, writes `"${DB_PASSWORD}"` and advises storing the secret in `.env`.
-- Refuses if `.db-snapshots.json` already exists, or when `stdin` is not a TTY.
+When `dbs` isn't running in an interactive terminal, it never prompts. Any step that would ask you something fails with an error instead. That includes `dbs init`, choosing between connections or snapshots, and confirming an overwrite or delete. So in scripts, pass exact snapshot names and set `default_connection` if you have more than one connection.
 
-### `dbs create [name]`
+Exit codes:
 
-Streams a Snapshot of the resolved Connection's database into Snapshot Storage via `mysqldump` (`--single-transaction --quick --no-tablespaces --skip-comments`, plus `--set-gtid-purged=OFF` on MySQL).
+| Code  | Meaning                                                            |
+| ----- | ------------------------------------------------------------------ |
+| `0`   | Success.                                                           |
+| `1`   | The command failed (for example, a snapshot wasn't found).         |
+| `2`   | The command was used incorrectly (for example, an unknown option). |
+| `130` | Cancelled with `Ctrl-C`.                                           |
 
-- Writes a leading Snapshot Header comment (`-- db-snapshots: driver=mysql connection=<name> created=<ISO-8601 UTC>`, see [ADR-0002](docs/adr/0002-snapshot-header-for-metadata.md)).
-- Without `[name]`, creates an **Automatic Snapshot** named `<connection>_<YYYY-MM-DD_HH-mm-ss>` (local time).
-- With `[name]`, creates a **Named Snapshot** with that Snapshot Name (characters outside `[A-Za-z0-9._-]` are sanitized to `-`; leading dots are rejected).
-- Checks both `.sql` and `.sql.gz` for an existing Snapshot Name: prompts for confirmation (default No) interactively, or fails with `snapshot_exists` when `stdin` is not a TTY.
-- Writes atomically to `<file>.partial` and renames on completion; removes `.partial` on failure or `Ctrl-C` (exit code `130`).
+## Contributing
 
-### `dbs load [name]`
-
-Streams a Snapshot into the resolved Connection's database via `mysql`.
-
-- Resolves the target Snapshot in order:
-  1. Exact Snapshot Name match.
-  2. Substring match: a single match is used directly; multiple matches open a filtered interactive picker (or fail with `ambiguous_snapshot` listing candidates when `stdin` is not a TTY).
-  3. When `[name]` is omitted: opens an interactive autocomplete picker sorted newest first (or fails when `stdin` is not a TTY).
-- Verifies the Snapshot Header's Driver matches the Connection's Driver before dropping anything (`driver_mismatch`); MySQL and MariaDB share the `mysql` Driver, and headerless `.sql` files skip this check.
-- Drops all existing tables and views in the target database (with `FOREIGN_KEY_CHECKS=0`, leaving routines and events untouched) before loading so the database matches the Snapshot.
-
-### `dbs list`
-
-Lists all top-level `.sql` Snapshots in Snapshot Storage sorted newest first by creation time (Snapshot Header `created`, falling back to file `mtime` for headerless files).
-
-- Shows `Name`, `Connection`, `Driver`, `Created at`, `Size` (human-readable, base 1024) and `Compressed` (`—` for unknown values on headerless files), or `No snapshots found` when Snapshot Storage is empty.
-
-### `dbs delete [name]`
-
-Removes a Snapshot from Snapshot Storage using the same Snapshot resolution as `dbs load` (exact match, substring match or interactive picker).
-
-- Prompts for confirmation (default No) when resolved via a substring match in interactive mode.
-- Never connects to the database or requires client binaries.
-
-### `dbs cleanup`
-
-Deletes older **Automatic Snapshots** (`<connection>_<YYYY-MM-DD_HH-mm-ss>` whose filename prefix matches the Connection recorded in the Snapshot Header) so that only the newest `2` per Connection remain.
-
-- Leaves **Named Snapshots** and headerless files untouched, and prints each deleted Snapshot Name.
-
-### Global options
-
-- `--help`, `-h`, `dbs help [command]`, `dbs <command> --help` — Show general or command help.
-- `--version` — Print the `dbs` version.
-- `--no-color` (or `NO_COLOR`) — Disable ANSI color output (also disabled automatically when output is not a TTY).
-
-## Development
-
-### Requirements
-
-- [Bun v1.4.4+](https://bun.com/docs/installation)
-- [MySQL client CLI (`mysql` and `mysqldump`)](https://dev.mysql.com/doc/)
-
-### Install, check, test and build
-
-Install dependencies, run static checks, run the test suite and compile the standalone binary with Bun:
-
-```sh
-bun install
-bun check         # type check
-bun fmt --check   # check formatting (run `bun fmt` to fix)
-bun lint          # lint (Bun canary builds only, for now)
-bun run test      # run the test suite (or `bun test`)
-bun run build     # compile the standalone binary to dist/dbs
-```
-
-The project has no `lint`, `check` or `fmt` scripts in `package.json` on purpose (run `bun lint` directly rather than `bun run lint`): a script with one of those names would shadow Bun's built-in command.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
