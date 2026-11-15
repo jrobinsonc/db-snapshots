@@ -31,8 +31,8 @@ export function enableColor(): void {
  *
  * @param stream - The stream the text will be written to.
  * @param env - The process environment.
- * @returns True when the stream is a TTY and neither `--no-color` nor
- *   `NO_COLOR` is set.
+ * @returns True when neither `--no-color` nor `NO_COLOR` is set, and either
+ *   the stream is a TTY or `FORCE_COLOR` is set.
  */
 export function isColorEnabled(
   stream: TtyLike,
@@ -231,7 +231,9 @@ export function printResult(result: CommandResult): void {
  * @param message - The error message, printed with an `Error:` prefix.
  */
 export function printError(message: string): void {
-  console.error(renderError(message, isColorEnabled(process.stderr)));
+  process.stderr.write(
+    `${renderError(message, isColorEnabled(process.stderr))}\n`,
+  );
 }
 
 /**
@@ -240,7 +242,9 @@ export function printError(message: string): void {
  * @param text - The text to print.
  */
 export function printDiagnostic(text: string): void {
-  console.error(colorize(text, 'red', isColorEnabled(process.stderr)));
+  process.stderr.write(
+    `${colorize(text, 'red', isColorEnabled(process.stderr))}\n`,
+  );
 }
 
 /**
