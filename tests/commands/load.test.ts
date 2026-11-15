@@ -238,14 +238,14 @@ describe('commands/load', () => {
   });
 
   test('CLI rejects --force as a usage error (2)', () => {
-    writeSnapshot('pg_backup', 'SELECT 1;\n', {
+    writeSnapshot('pg_snapshot', 'SELECT 1;\n', {
       driver: 'pgsql',
       connection: 'analytics',
       created: '2026-10-31T12:00:00Z',
     });
 
     const result = Bun.spawnSync(
-      ['bun', ENTRYPOINT, 'load', 'pg_backup', '--force'],
+      ['bun', ENTRYPOINT, 'load', 'pg_snapshot', '--force'],
       {
         cwd: root,
         stdin: 'ignore',
