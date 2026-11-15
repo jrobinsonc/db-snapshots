@@ -11,6 +11,10 @@ import { UserError } from '../../src/utils/exceptions';
 import { CONFIG_FILE_NAME } from '../../src/utils/find-config-file';
 import { loadConfig } from '../../src/utils/load-config';
 
+const ENTRYPOINT = path.join(import.meta.dir, '..', '..', 'index.ts');
+const PROMPT_TIMEOUT_MS = 5000;
+const PROMPT_POLL_INTERVAL_MS = 10;
+
 const ANSWERS = {
   name: 'local',
   host: '127.0.0.1',
@@ -191,5 +195,61 @@ describe('commands/init', () => {
       connection: 'local',
       password_env_var: null,
     });
+  });
+
+  test('CLI renders .env password advice when a literal password is entered', async () => {
+    let output = '';
+    const decoder = new TextDecoder();
+
+    const proc = Bun.spawn(['bun', ENTRYPOINT, 'init', '--no-color'], {
+      cwd: root,
+      env: { ...process.env, NO_COLOR: '1' },
+      terminal: {
+        cols: 120,
+        rows: 24,
+        data(_terminal, chunk) {
+          output += decoder.decode(chunk);
+        },
+      },
+    });
+
+    async function waitForPrompt(text: string): Promise<void> {
+      const deadline = Date.now() + PROMPT_TIMEOUT_MS;
+
+      while (!output.includes(text) && Date.now() < deadline) {
+        await Bun.sleep(PROMPT_POLL_INTERVAL_MS);
+      }
+
+      expect(output).toContain(text);
+    }
+
+    const steps: Array<[string, string]> = [
+      ['Connection name:', '\r'],
+      ['Host:', '\r'],
+      ['Port:', '\r'],
+      ['User:', '\r'],
+      [
+        'Password (leave empty for none, or type a ${VAR} reference):',
+        's3cret!\r',
+      ],
+      ['Database:', 'app\r'],
+    ];
+
+    for (const [prompt, reply] of steps) {
+      await waitForPrompt(prompt);
+      proc.terminal?.write(reply);
+    }
+
+    const exitCode = await proc.exited;
+
+    expect(exitCode).toBe(0);
+    expect(output).toContain(`Config written: ${configPath()}`);
+    expect(output).toContain(
+      'The password was not written to the config. Add your password environment variable to .env and keep .env out of version control.',
+    );
+    expect(fs.readFileSync(configPath(), 'utf8')).not.toContain('s3cret!');
+    expect(loadConfig(configPath()).connections['local']?.password).toEqual(
+      '${DB_PASSWORD}',
+    );
   });
 });

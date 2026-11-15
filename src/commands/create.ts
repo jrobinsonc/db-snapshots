@@ -6,7 +6,7 @@ import describeSnapshot from '../utils/describe-snapshot';
 import { findConfigFile } from '../utils/find-config-file';
 import { loadConfig } from '../utils/load-config';
 import { localTimeParts } from '../utils/local-time';
-import { progress } from '../utils/output';
+import { progress as defaultProgress } from '../utils/output';
 import { confirm as promptConfirm, ask as promptAsk } from '../utils/prompt';
 import { createConnectionResolver } from '../utils/resolve-connection';
 import { runner as defaultRunner } from '../utils/process-runner';
@@ -19,6 +19,12 @@ const EXIT_INTERRUPTED = 130;
 const PARTIAL_SUFFIX = '.partial';
 const SNAPSHOT_EXTENSIONS = ['.sql', '.sql.gz'] as const;
 
+interface ProcessSignals {
+  prependOnceListener: (event: 'SIGINT', listener: () => void) => unknown;
+  once: (event: 'exit', listener: () => void) => unknown;
+  off: (event: 'SIGINT' | 'exit', listener: () => void) => unknown;
+}
+
 interface CreateDeps {
   /** The prompt helper's `ask`. */
   ask: typeof promptAsk;
@@ -28,12 +34,16 @@ interface CreateDeps {
   cwd: () => string;
   /** Looks up the Driver for a Connection. */
   getDriver: typeof defaultGetDriver;
+  /** Reports progress on stderr. */
+  progress?: typeof defaultProgress;
   /** The process runner used for binary preflight. */
   runner: ProcessRunner;
   /** The clock, for the creation time and Automatic Snapshot names. */
   now: () => Date;
   /** Terminates the process when interrupted by SIGINT. */
   exit?: (code: number) => void;
+  /** Process signal/exit emitter, overridable in tests. */
+  signals?: ProcessSignals;
 }
 
 /**
@@ -159,8 +169,10 @@ async function getDump(
  * @returns The command.
  */
 export function createCreate(deps: CreateDeps): Command {
+  const reportProgress = deps.progress ?? defaultProgress;
   const resolveConnection = createConnectionResolver({ ask: deps.ask });
   const exit = deps.exit ?? ((code: number) => process.exit(code));
+  const signals = deps.signals ?? process;
 
   return async ({ args }) => {
     // Resolved first so a config problem fails before any Snapshot prompt.
@@ -193,7 +205,7 @@ export function createCreate(deps: CreateDeps): Command {
 
     mkdirSync(config.storage, { recursive: true });
 
-    progress('Creating dump file...');
+    reportProgress('Creating dump file...');
 
     const partialPath = `${dump.path}${PARTIAL_SUFFIX}`;
     const removePartial = () => {
@@ -207,8 +219,8 @@ export function createCreate(deps: CreateDeps): Command {
     };
 
     // Prepend so the partial file is removed before any process-wide SIGINT exit.
-    process.prependOnceListener('SIGINT', onSigint);
-    process.once('exit', removePartial);
+    signals.prependOnceListener('SIGINT', onSigint);
+    signals.once('exit', removePartial);
 
     try {
       await driver.dump(connection, {
@@ -220,7 +232,7 @@ export function createCreate(deps: CreateDeps): Command {
         return;
       }
 
-      process.off('exit', removePartial);
+      signals.off('exit', removePartial);
 
       // Remove both `.sql` and `.sql.gz` only once the partial file is complete,
       // so a failed or interrupted dump leaves any existing Snapshot intact.
@@ -234,8 +246,8 @@ export function createCreate(deps: CreateDeps): Command {
 
       throw error;
     } finally {
-      process.off('SIGINT', onSigint);
-      process.off('exit', removePartial);
+      signals.off('SIGINT', onSigint);
+      signals.off('exit', removePartial);
     }
 
     return {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -36,6 +37,7 @@ const unused = (): never => {
 interface HarnessOptions {
   root: string;
   dumpBody?: string;
+  ask?: (questions: Question[]) => Promise<Record<string, unknown>>;
   confirm?: typeof promptConfirm;
   confirmAnswer?: boolean;
   preflightError?: Error;
@@ -49,9 +51,12 @@ interface HarnessOptions {
 
 function createHarness(options: HarnessOptions) {
   const preflights: string[] = [];
+  const asked: Question[][] = [];
   const confirmations: string[] = [];
   const dumps: ConnectionConfig[] = [];
   const exitCodes: number[] = [];
+  const progressMessages: string[] = [];
+  const signals = new EventEmitter();
 
   const runner: ProcessRunner = options.runner ?? {
     preflight(binary) {
@@ -82,7 +87,13 @@ function createHarness(options: HarnessOptions) {
   };
 
   const create = createCreate({
-    ask: unused as never,
+    ask: async <Answers>(questions: Question[]) => {
+      asked.push(questions);
+      if (options.ask) {
+        return (await options.ask(questions)) as Answers;
+      }
+      throw new Error('Unexpected prompt in test');
+    },
     confirm:
       options.confirm ??
       (async (message: string) => {
@@ -91,14 +102,27 @@ function createHarness(options: HarnessOptions) {
       }),
     cwd: () => options.root,
     getDriver: () => driver,
+    progress: (message: string) => {
+      progressMessages.push(message);
+    },
     runner,
+    signals,
     now: () => NOW,
     exit: (code) => {
       exitCodes.push(code);
     },
   });
 
-  return { create, preflights, confirmations, dumps, exitCodes };
+  return {
+    create,
+    preflights,
+    asked,
+    confirmations,
+    dumps,
+    exitCodes,
+    progressMessages,
+    signals,
+  };
 }
 
 describe('commands/create', () => {
@@ -146,7 +170,7 @@ describe('commands/create', () => {
   }
 
   test('writes a named Snapshot with its header to the Snapshot Storage', async () => {
-    const { create } = createHarness({
+    const { create, progressMessages } = createHarness({
       root,
       dumpBody: 'CREATE TABLE t;\n',
     });
@@ -155,6 +179,8 @@ describe('commands/create', () => {
 
     const file = path.join(storage, 'baseline.sql');
     const [headerLine] = fs.readFileSync(file, 'utf8').split('\n');
+
+    expect(progressMessages).toEqual(['Creating dump file...']);
 
     expect(result).toMatchObject({
       kind: 'create',
@@ -217,6 +243,68 @@ describe('commands/create', () => {
     expect(
       fs.existsSync(path.join(storage, 'local_2026-10-31_21-30-00.sql')),
     ).toBe(true);
+  });
+
+  test('uses default_connection without prompting when multiple Connections are configured', async () => {
+    fs.writeFileSync(
+      path.join(root, CONFIG_FILE_NAME),
+      JSON.stringify({
+        default_connection: 'staging',
+        connections: {
+          local: { driver: 'mysql', database: 'app_local' },
+          staging: { driver: 'mysql', database: 'app_staging' },
+        },
+      }),
+    );
+    const { create, asked, dumps } = createHarness({ root });
+
+    const result = await invoke(create);
+
+    expect(asked).toEqual([]);
+    expect(dumps).toEqual([{ driver: 'mysql', database: 'app_staging' }]);
+    expect(result).toMatchObject({
+      kind: 'create',
+      snapshot: {
+        name: 'staging_2026-10-31_21-30-00',
+        connection: 'staging',
+        driver: 'mysql',
+      },
+    });
+  });
+
+  test('prompts to pick a Connection when multiple Connections exist without default_connection', async () => {
+    fs.writeFileSync(
+      path.join(root, CONFIG_FILE_NAME),
+      JSON.stringify({
+        connections: {
+          local: { driver: 'mysql', database: 'app_local' },
+          analytics: { driver: 'mysql', database: 'app_analytics' },
+        },
+      }),
+    );
+    const { create, asked, dumps } = createHarness({
+      root,
+      ask: async () => ({ name: 'analytics' }),
+    });
+
+    const result = await invoke(create, 'baseline');
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.[0]).toMatchObject({
+      type: 'select',
+      name: 'name',
+      message: 'Select the Connection:',
+      choices: ['local', 'analytics'],
+    });
+    expect(dumps).toEqual([{ driver: 'mysql', database: 'app_analytics' }]);
+    expect(result).toMatchObject({
+      kind: 'create',
+      snapshot: {
+        name: 'baseline',
+        connection: 'analytics',
+        driver: 'mysql',
+      },
+    });
   });
 
   test('refuses an empty Snapshot Name as a usage error', async () => {
@@ -572,12 +660,12 @@ describe('commands/create', () => {
     const file = path.join(storage, 'baseline.sql');
     const partialFile = `${file}.partial`;
 
-    const { create, exitCodes } = createHarness({
+    const { create, exitCodes, signals } = createHarness({
       root,
       onDump: async (_connection, dumpOptions) => {
         await dumpOptions.stdout(streamOf('CREATE TABLE t (id INT);\n'));
         expect(fs.existsSync(partialFile)).toBe(true);
-        process.emit('SIGINT', 'SIGINT');
+        signals.emit('SIGINT', 'SIGINT');
       },
     });
 
@@ -585,6 +673,8 @@ describe('commands/create', () => {
 
     expect(result).toBeUndefined();
     expect(exitCodes).toEqual([EXIT_INTERRUPTED]);
+    expect(signals.listenerCount('SIGINT')).toBe(0);
+    expect(signals.listenerCount('exit')).toBe(0);
     expect(fs.existsSync(partialFile)).toBe(false);
     expect(fs.existsSync(file)).toBe(false);
   });
