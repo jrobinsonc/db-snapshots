@@ -6,7 +6,7 @@ import describeSnapshot from '../utils/describe-snapshot';
 import { findConfigFile } from '../utils/find-config-file';
 import { loadConfig } from '../utils/load-config';
 import { localTimeParts } from '../utils/local-time';
-import { progress } from '../utils/output';
+import { progress as defaultProgress } from '../utils/output';
 import { confirm as promptConfirm, ask as promptAsk } from '../utils/prompt';
 import { createConnectionResolver } from '../utils/resolve-connection';
 import { runner as defaultRunner } from '../utils/process-runner';
@@ -28,6 +28,8 @@ interface CreateDeps {
   cwd: () => string;
   /** Looks up the Driver for a Connection. */
   getDriver: typeof defaultGetDriver;
+  /** Reports progress on stderr. */
+  progress?: typeof defaultProgress;
   /** The process runner used for binary preflight. */
   runner: ProcessRunner;
   /** The clock, for the creation time and Automatic Snapshot names. */
@@ -159,6 +161,7 @@ async function getDump(
  * @returns The command.
  */
 export function createCreate(deps: CreateDeps): Command {
+  const reportProgress = deps.progress ?? defaultProgress;
   const resolveConnection = createConnectionResolver({ ask: deps.ask });
   const exit = deps.exit ?? ((code: number) => process.exit(code));
 
@@ -193,7 +196,7 @@ export function createCreate(deps: CreateDeps): Command {
 
     mkdirSync(config.storage, { recursive: true });
 
-    progress('Creating dump file...');
+    reportProgress('Creating dump file...');
 
     const partialPath = `${dump.path}${PARTIAL_SUFFIX}`;
     const removePartial = () => {

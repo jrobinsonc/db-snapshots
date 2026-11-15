@@ -52,6 +52,7 @@ function createHarness(options: HarnessOptions) {
   const confirmations: string[] = [];
   const dumps: ConnectionConfig[] = [];
   const exitCodes: number[] = [];
+  const progressMessages: string[] = [];
 
   const runner: ProcessRunner = options.runner ?? {
     preflight(binary) {
@@ -91,6 +92,9 @@ function createHarness(options: HarnessOptions) {
       }),
     cwd: () => options.root,
     getDriver: () => driver,
+    progress: (message: string) => {
+      progressMessages.push(message);
+    },
     runner,
     now: () => NOW,
     exit: (code) => {
@@ -98,7 +102,14 @@ function createHarness(options: HarnessOptions) {
     },
   });
 
-  return { create, preflights, confirmations, dumps, exitCodes };
+  return {
+    create,
+    preflights,
+    confirmations,
+    dumps,
+    exitCodes,
+    progressMessages,
+  };
 }
 
 describe('commands/create', () => {
@@ -146,7 +157,7 @@ describe('commands/create', () => {
   }
 
   test('writes a named Snapshot with its header to the Snapshot Storage', async () => {
-    const { create } = createHarness({
+    const { create, progressMessages } = createHarness({
       root,
       dumpBody: 'CREATE TABLE t;\n',
     });
@@ -155,6 +166,8 @@ describe('commands/create', () => {
 
     const file = path.join(storage, 'baseline.sql');
     const [headerLine] = fs.readFileSync(file, 'utf8').split('\n');
+
+    expect(progressMessages).toEqual(['Creating dump file...']);
 
     expect(result).toMatchObject({
       kind: 'create',
