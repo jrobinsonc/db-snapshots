@@ -19,6 +19,12 @@ const EXIT_INTERRUPTED = 130;
 const PARTIAL_SUFFIX = '.partial';
 const SNAPSHOT_EXTENSIONS = ['.sql', '.sql.gz'] as const;
 
+interface ProcessSignals {
+  prependOnceListener: (event: 'SIGINT', listener: () => void) => unknown;
+  once: (event: 'exit', listener: () => void) => unknown;
+  off: (event: 'SIGINT' | 'exit', listener: () => void) => unknown;
+}
+
 interface CreateDeps {
   /** The prompt helper's `ask`. */
   ask: typeof promptAsk;
@@ -36,6 +42,8 @@ interface CreateDeps {
   now: () => Date;
   /** Terminates the process when interrupted by SIGINT. */
   exit?: (code: number) => void;
+  /** Process signal/exit emitter, overridable in tests. */
+  signals?: ProcessSignals;
 }
 
 /**
@@ -164,6 +172,7 @@ export function createCreate(deps: CreateDeps): Command {
   const reportProgress = deps.progress ?? defaultProgress;
   const resolveConnection = createConnectionResolver({ ask: deps.ask });
   const exit = deps.exit ?? ((code: number) => process.exit(code));
+  const signals = deps.signals ?? process;
 
   return async ({ args }) => {
     // Resolved first so a config problem fails before any Snapshot prompt.
@@ -210,8 +219,8 @@ export function createCreate(deps: CreateDeps): Command {
     };
 
     // Prepend so the partial file is removed before any process-wide SIGINT exit.
-    process.prependOnceListener('SIGINT', onSigint);
-    process.once('exit', removePartial);
+    signals.prependOnceListener('SIGINT', onSigint);
+    signals.once('exit', removePartial);
 
     try {
       await driver.dump(connection, {
@@ -223,7 +232,7 @@ export function createCreate(deps: CreateDeps): Command {
         return;
       }
 
-      process.off('exit', removePartial);
+      signals.off('exit', removePartial);
 
       // Remove both `.sql` and `.sql.gz` only once the partial file is complete,
       // so a failed or interrupted dump leaves any existing Snapshot intact.
@@ -237,8 +246,8 @@ export function createCreate(deps: CreateDeps): Command {
 
       throw error;
     } finally {
-      process.off('SIGINT', onSigint);
-      process.off('exit', removePartial);
+      signals.off('SIGINT', onSigint);
+      signals.off('exit', removePartial);
     }
 
     return {

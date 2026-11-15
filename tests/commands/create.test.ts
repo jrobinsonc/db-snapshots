@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,6 +56,7 @@ function createHarness(options: HarnessOptions) {
   const dumps: ConnectionConfig[] = [];
   const exitCodes: number[] = [];
   const progressMessages: string[] = [];
+  const signals = new EventEmitter();
 
   const runner: ProcessRunner = options.runner ?? {
     preflight(binary) {
@@ -104,6 +106,7 @@ function createHarness(options: HarnessOptions) {
       progressMessages.push(message);
     },
     runner,
+    signals,
     now: () => NOW,
     exit: (code) => {
       exitCodes.push(code);
@@ -118,6 +121,7 @@ function createHarness(options: HarnessOptions) {
     dumps,
     exitCodes,
     progressMessages,
+    signals,
   };
 }
 
@@ -656,12 +660,12 @@ describe('commands/create', () => {
     const file = path.join(storage, 'baseline.sql');
     const partialFile = `${file}.partial`;
 
-    const { create, exitCodes } = createHarness({
+    const { create, exitCodes, signals } = createHarness({
       root,
       onDump: async (_connection, dumpOptions) => {
         await dumpOptions.stdout(streamOf('CREATE TABLE t (id INT);\n'));
         expect(fs.existsSync(partialFile)).toBe(true);
-        process.emit('SIGINT', 'SIGINT');
+        signals.emit('SIGINT', 'SIGINT');
       },
     });
 
@@ -669,6 +673,8 @@ describe('commands/create', () => {
 
     expect(result).toBeUndefined();
     expect(exitCodes).toEqual([EXIT_INTERRUPTED]);
+    expect(signals.listenerCount('SIGINT')).toBe(0);
+    expect(signals.listenerCount('exit')).toBe(0);
     expect(fs.existsSync(partialFile)).toBe(false);
     expect(fs.existsSync(file)).toBe(false);
   });
