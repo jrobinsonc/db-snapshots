@@ -237,6 +237,27 @@ describe('commands/load', () => {
     expect(loadCalls).toEqual([]);
   });
 
+  test('CLI rejects --force as a usage error (2)', () => {
+    writeSnapshot('pg_backup', 'SELECT 1;\n', {
+      driver: 'pgsql',
+      connection: 'analytics',
+      created: '2026-10-31T12:00:00Z',
+    });
+
+    const result = Bun.spawnSync(
+      ['bun', ENTRYPOINT, 'load', 'pg_backup', '--force'],
+      {
+        cwd: root,
+        stdin: 'ignore',
+      },
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout.toString()).toBe('');
+    expect(result.stderr.toString()).toContain('Error:');
+    expect(result.stderr.toString()).toContain('force');
+  });
+
   test('CLI exits with code 1 and prints the driver mismatch error to stderr', () => {
     writeSnapshot('pg_backup', 'SELECT 1;\n', {
       driver: 'pgsql',
@@ -306,6 +327,75 @@ describe('commands/load', () => {
     expect(result.snapshot.driver).toBeNull();
     expect(result.connection).toBe('local');
     expect(result.dropped).toBe(true);
+  });
+
+  test('uses default_connection without prompting when multiple Connections are configured', async () => {
+    fs.writeFileSync(
+      path.join(root, CONFIG_FILE_NAME),
+      JSON.stringify({
+        default_connection: 'staging',
+        connections: {
+          local: { driver: 'mysql', database: 'app_local' },
+          staging: { driver: 'mysql', database: 'app_staging' },
+        },
+      }),
+    );
+    writeSnapshot('baseline', 'CREATE TABLE t (id INT);\n', {
+      driver: 'mysql',
+      connection: 'staging',
+      created: '2026-10-31T21:30:00Z',
+    });
+
+    const { load, asked, runs } = createHarness();
+    const result = (await load({
+      args: new Map([[0, 'baseline']]),
+    })) as LoadResult;
+
+    expect(asked).toEqual([]);
+    expect(runs[1]?.command).toEqual(['mysql', 'app_staging']);
+    expect(result).toMatchObject({
+      kind: 'load',
+      connection: 'staging',
+      snapshot: { name: 'baseline' },
+    });
+  });
+
+  test('prompts to pick a Connection when multiple Connections exist without default_connection', async () => {
+    fs.writeFileSync(
+      path.join(root, CONFIG_FILE_NAME),
+      JSON.stringify({
+        connections: {
+          local: { driver: 'mysql', database: 'app_local' },
+          analytics: { driver: 'mysql', database: 'app_analytics' },
+        },
+      }),
+    );
+    writeSnapshot('baseline', 'CREATE TABLE t (id INT);\n', {
+      driver: 'mysql',
+      connection: 'analytics',
+      created: '2026-10-31T21:30:00Z',
+    });
+
+    const { load, asked, runs } = createHarness({
+      ask: async () => ({ name: 'analytics' }),
+    });
+    const result = (await load({
+      args: new Map([[0, 'baseline']]),
+    })) as LoadResult;
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.[0]).toMatchObject({
+      type: 'select',
+      name: 'name',
+      message: 'Select the Connection:',
+      choices: ['local', 'analytics'],
+    });
+    expect(runs[1]?.command).toEqual(['mysql', 'app_analytics']);
+    expect(result).toMatchObject({
+      kind: 'load',
+      connection: 'analytics',
+      snapshot: { name: 'baseline' },
+    });
   });
 
   test('drops all tables and views before streaming the Snapshot into mysql', async () => {
