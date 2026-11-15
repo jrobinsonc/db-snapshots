@@ -4,6 +4,7 @@
 [![CodeQL](https://github.com/jrobinsonc/db-snapshots/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/jrobinsonc/db-snapshots/actions/workflows/github-code-scanning/codeql)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/jrobinsonc/db-snapshots/badge)](https://scorecard.dev/viewer/?uri=github.com/jrobinsonc/db-snapshots)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=jrobinsonc_db-snapshots&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=jrobinsonc_db-snapshots)
+[![Latest release](https://img.shields.io/github/v/release/jrobinsonc/db-snapshots)](https://github.com/jrobinsonc/db-snapshots/releases)
 
 Take a snapshot before running migrations, switching branches, or testing queries, and load it back with a single command whenever you need a clean slate.
 

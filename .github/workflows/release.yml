@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify tag version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify tag matches package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          tag_version="${TAG#v}"
+          pkg_version=$(jq -r '.version // empty' package.json)
+          if [ -z "$pkg_version" ]; then
+            echo "::error file=package.json::Could not read version from package.json"
+            exit 1
+          fi
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::Tag '$TAG' (version '$tag_version') does not match package.json version '$pkg_version'"
+            exit 1
+          fi
+          echo "Verified tag $TAG matches package.json version $pkg_version"
+
+  checks:
+    name: CI checks
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Build and publish release
+    needs: [verify, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun and install dependencies
+        uses: ./.github/actions/setup-bun
+
+      - name: Build binary
+        run: bun run build
+
+      - name: Verify compiled binary
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          binary_version=$(./dist/dbs --version)
+          expected_version="${TAG#v}"
+          if [ "$binary_version" != "$expected_version" ]; then
+            echo "::error::Compiled binary version '$binary_version' does not match tag '$TAG'"
+            exit 1
+          fi
+          ./dist/dbs --help >/dev/null
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/dbs \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes \
+            --verify-tag
