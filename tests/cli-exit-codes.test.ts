@@ -63,8 +63,14 @@ describe('cli exit codes', () => {
     expect(output).toContain('nope');
   });
 
-  test('an unknown flag is a usage error (2)', () => {
-    expect(runCli('load', '--bogus').exitCode).toBe(2);
+  test('an unknown flag is a usage error (2) without raw yargs options output', () => {
+    const { exitCode, output } = runCli('load', '--bogus');
+
+    expect(exitCode).toBe(2);
+    expect(output).toContain('Error: Unknown argument: bogus');
+    expect(output).not.toContain('Options:');
+    expect(output).not.toContain('--help');
+    expect(output).not.toContain('--version');
   });
 
   test('a user error is exit 1 with a human message', () => {

@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
+import { UserError } from '../../src/utils/exceptions';
 import parseCliArguments from '../../src/utils/parse-cli-arguments';
 
 describe('utils/parseCliArguments', () => {
@@ -95,7 +96,31 @@ describe('utils/parseCliArguments', () => {
     expect(args.get('disable-keys')).toEqual(false);
   });
 
-  test('it rejects unknown flags', () => {
-    expect(() => parseCliArguments(['create', '--unknown'], {})).toThrow();
+  test('it rejects unknown flags as a usage error without writing to stderr', () => {
+    const consoleErrorSpy = spyOn(console, 'error').mockImplementation(
+      () => {},
+    );
+    const stderrWriteSpy = spyOn(process.stderr, 'write').mockImplementation(
+      () => true,
+    );
+
+    try {
+      let caught: unknown;
+
+      try {
+        parseCliArguments(['create', '--unknown'], {});
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(UserError);
+      expect((caught as UserError).code).toBe('usage');
+      expect((caught as UserError).message).toBe('Unknown argument: unknown');
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      expect(stderrWriteSpy).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+      stderrWriteSpy.mockRestore();
+    }
   });
 });
